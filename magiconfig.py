@@ -1,5 +1,5 @@
 import argparse
-import os, imp, uuid
+import sys, os, imp, uuid
 import six
 from collections import defaultdict
 
@@ -27,27 +27,38 @@ class ArgumentParser(argparse.ArgumentParser):
     # config_args = arguments used to indicate config file
     # config_obj = string identifying magiconfig object in module imported from config file
     # config_required = require config_arg to be provided when parsing
+    # config_default = default value for config filename
     # strict = reject imported config if it has unknown keys
-    def __init__(self, config_args=["-C","--config"], config_obj="config", config_required=False, strict=False, **kwargs):
+    def __init__(self, config_args=["-C","--config"], config_obj="config", config_required=False, config_default="", strict=False, **kwargs):
         if len(config_obj)==0:
             raise ValueError("config_obj must be specified")
 
         self.config_args = config_args
         self.config_obj = config_obj
         self.strict = strict
+        self._dest = "config"
         argparse.ArgumentParser.__init__(self, **kwargs)
         
         # set up config arg(s) if any
         # dest is fixed because it is only used in internal namespace
-        if len(config_args)>0: self._config_action = self.add_argument(*config_args, dest="config", type=str, help="name of config file to import", required=config_required)
+        if len(config_args)>0:
+            self._config_action = self.add_argument(*config_args, dest=self._dest, type=str, help="name of config file to import", required=config_required, default=config_default if len(config_default)>0 else None)
+            self._config_option_string_actions = {}
+            # keep config action separate from other actions
+            for option_string in self._config_action.option_strings:
+                self._config_option_string_actions[option_string] = self._config_action
+                self._option_string_actions.pop(option_string)
+            self._remove_action(self._config_action)
         else: self._config_action = None
-        # keep config action separate from other actions
-        self._remove_action(self._config_action)
         self._other_actions = []
+        self._other_defaults = {}
 
     parse_known_args_orig = argparse.ArgumentParser.parse_known_args
 
     def parse_known_args(self, args=None, namespace=None):
+        if args is None: args = _sys.argv[1:]
+        else: args = list(args)
+    
         if namespace is None: namespace = MagiConfig()
 
         # fall back to default argparse behavior
@@ -55,23 +66,27 @@ class ArgumentParser(argparse.ArgumentParser):
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # reset known args to just config_args and parse
-        self._other_actions = self._actions[:]
-        self._actions = [self._config_action]
+        self._other_actions, self._actions = self._actions, [self._config_action]
+        self._other_defaults, self._defaults = self._defaults, {}
+        self._other_option_string_actions, self._option_string_actions = self._option_string_actions, self._config_option_string_actions
         tmpspace, remaining_args = self.parse_known_args_orig(args=args)
 
         # fall back to default argparse behavior
         # (config_required already checked above, when parsing for config_arg)
-        if not hasattr(tmpspace,"config") or tmpspace.config is None:
+        if not hasattr(tmpspace,self._dest) or tmpspace.config is None:
             # restore known args and parse
-            self._actions = self._other_actions[:]
-            self._other_actions = []
+            self._actions, self._other_actions = self._other_actions, []
+            self._defaults, self._other_defaults = self._other_defaults, {}
+            self._option_string_actions, self._other_option_string_actions = self._other_option_string_actions, {}
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # get namespace as filled by config
         namespace = self.parse_config(tmpspace.config,namespace=namespace)
 
         # restore known args
-        self._actions = self._other_actions[:]
+        self._actions, self._other_actions = self._other_actions, []
+        self._defaults, self._other_defaults = self._other_defaults, {}
+        self._option_string_actions, self._other_option_string_actions = self._other_option_string_actions, {}
 
         # call parse_known_args_orig again (supplying namespace from above)
         tmpspace, remaining_args = self.parse_known_args_orig(args=remaining_args,namespace=namespace)

@@ -4,6 +4,6 @@ req = urllib.request.urlopen('https://github.com/python/cpython/raw/v'+platform.
 with open('test_argparse.py','b+w') as modfile:
 	modfile.write(req.read())
 with open('test_argparse.py','r') as infile, open('test_argparse_magiconfig.py','w') as outfile:
-    outfile.write("import magiconfig")
+    outfile.write("import magiconfig\n")
     for line in infile:
         outfile.write(line.replace('argparse.ArgumentParser', 'magiconfig.ArgumentParser'))

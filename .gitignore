@@ -129,6 +129,6 @@ dmypy.json
 .pyre/
 
 # custom
-/test_argparse.py
-/test_argparse_magiconfig.py
+/tests/test_argparse.py
+/tests/test_argparse_magiconfig.py
 

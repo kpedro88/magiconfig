@@ -113,6 +113,28 @@ def test_inconsistent_type():
     )
     return args==expected
 
+def test_subparsers():
+    # parser does not need config_options if it will have subparsers
+    parser = magiconfig.ArgumentParser()
+    subparsers = parser.add_subparsers()
+    parser_one = subparsers.add_parser("one",config_options=magiconfig.MagiConfigOptions(
+        obj = "config_one"
+    ))
+    parser_one.add_argument("-f","--foo", dest="foo", type=str, default="lorem", help="foo arg")
+    parser_two = subparsers.add_parser("two",config_options=magiconfig.MagiConfigOptions(
+        obj = "config_two"
+    ))
+    parser_two.add_argument("-b","--bar", dest="bar", type=float, required=True, help="bar arg")
+    args_one = parser.parse_args(args=["one","-C","tests/test_config_sub.py"])
+    expected_one = magiconfig.MagiConfig(
+        foo = '2'
+    )
+    args_two = parser.parse_args(args=["two","-C","tests/test_config_sub.py"])
+    expected_two = magiconfig.MagiConfig(
+        bar = 2.0
+    )
+    return args_one==expected_one and args_two==expected_two
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -123,6 +145,7 @@ if __name__=="__main__":
         ("test_required_arg",test_required_arg),
         ("test_override",test_override),
         ("test_inconsistent_type",test_inconsistent_type),
+        ("test_subparsers",test_subparsers),
     ])
     successful = []
     failed = []

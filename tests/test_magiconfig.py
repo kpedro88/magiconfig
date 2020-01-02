@@ -135,6 +135,27 @@ def test_subparsers():
     )
     return args_one==expected_one and args_two==expected_two
 
+def test_config_join():
+    config_one = magiconfig.MagiConfig(
+        foo = '2',
+        bar = 2.0
+    )
+    config_two = magiconfig.MagiConfig(
+        foo = '3'
+    )
+    config_three = magiconfig.MagiConfig(
+        bar = 3.0,
+        ipsum = True
+    )
+    config_one.join(config_two,prefer_other=True)
+    config_one.join(config_three)
+    expected_config = magiconfig.MagiConfig(
+        foo = '3',
+        bar = 2.0,
+        ipsum = True
+    )
+    return config_one==expected_config
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -146,6 +167,7 @@ if __name__=="__main__":
         ("test_override",test_override),
         ("test_inconsistent_type",test_inconsistent_type),
         ("test_subparsers",test_subparsers),
+        ("test_config_join",test_config_join),
     ])
     successful = []
     failed = []

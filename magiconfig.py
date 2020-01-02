@@ -25,9 +25,10 @@ class MagiConfig(argparse.Namespace):
             outfile.write('\n'.join(lines))
 
     # to merge with another config
-    def join(self, other_config):
+    def join(self, other_config, prefer_other=False):
         for attr,val in six.iteritems(vars(other_config)):
-            setattr(self,attr,val)
+            if prefer_other or not hasattr(self,attr):
+                setattr(self,attr,val)
 
 class MagiConfigOptions(object):
     # arguments:

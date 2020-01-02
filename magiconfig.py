@@ -125,6 +125,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def parse_config(self, config_name, namespace=None):
         # import config as module
+        # (from configurati)
         module_id = str(uuid.uuid4())
         module = imp.load_source(module_id, os.path.abspath(config_name))
         config = getattr(module,self.config_obj)
@@ -182,6 +183,7 @@ def add_parser_new(self, name, **kwargs):
 argparse._SubParsersAction.add_parser = add_parser_new
 
 # add all public classes and constants from argparse namespace to this namespace to be interchangeable
+# (from ConfigArgParse)
 HelpFormatter = argparse.HelpFormatter
 RawDescriptionHelpFormatter = argparse.RawDescriptionHelpFormatter
 RawTextHelpFormatter = argparse.RawTextHelpFormatter

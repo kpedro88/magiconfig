@@ -22,27 +22,52 @@ class MagiConfig(argparse.Namespace):
         for attr,val in six.iteritems(vars(other_config)):
             setattr(self,attr,val)
 
-class ArgumentParser(argparse.ArgumentParser):
-    # additional arguments:
-    # config_args = arguments used to indicate config file
-    # config_obj = string identifying magiconfig object in module imported from config file
-    # config_required = require config_arg to be provided when parsing
-    # config_default = default value for config filename
+class MagiConfigOptions(object):
+    # arguments:
+    # args = arguments used to indicate config file
+    # obj = string identifying magiconfig object in module imported from config file
+    # required = require config_arg to be provided when parsing
+    # default = default value for config filename
     # strict = reject imported config if it has unknown keys
-    def __init__(self, config_args=["-C","--config"], config_obj="config", config_required=False, config_default="", strict=False, **kwargs):
-        if len(config_obj)==0:
-            raise ValueError("config_obj must be specified")
+    def __init__(self, args=["-C","--config"], obj="config", required=False, default="", strict=False):
+        if len(obj)==0:
+            raise ValueError("obj must be specified")
 
-        self.config_args = config_args
-        self.config_obj = config_obj
+        self.args = args
+        self.obj = obj
+        self.required = required
+        self.default = default
         self.strict = strict
-        self._dest = "config"
-        argparse.ArgumentParser.__init__(self, **kwargs)
-        
+
+class ArgumentParser(argparse.ArgumentParser):
+    # additional argument:
+    # config_options: default is None, otherwise expects instance of MagiConfigOptions
+    def __init__(self, *args, **kwargs):
+        config_options = kwargs.pop("config_options", None)
+        argparse.ArgumentParser.__init__(self, *args, **kwargs)
+
+        if config_options is not None:
+            self.config_args = config_options.args
+            self.config_obj = config_options.obj
+            self.strict = config_options.strict
+            self._dest = "config"
+        else:
+            self.config_args = None
+            self.config_obj = None
+            self.strict = False
+            self._dest = ""
+
         # set up config arg(s) if any
         # dest is fixed because it is only used in internal namespace
-        if len(config_args)>0:
-            self._config_action = self.add_argument(*config_args, dest=self._dest, type=str, help="name of config file to import", required=config_required, default=config_default if len(config_default)>0 else None)
+        if self.config_args is not None and len(self.config_args)>0:
+            self._config_action = self.add_argument(
+                *self.config_args,
+                dest=self._dest,
+                type=str,
+                help="name of config file to import",
+                required=config_options.required,
+                default=config_options.default if len(config_options.default)>0 else None
+            )
             self._config_option_string_actions = {}
             # keep config action separate from other actions
             for option_string in self._config_action.option_strings:

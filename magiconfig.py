@@ -56,7 +56,7 @@ class ArgumentParser(argparse.ArgumentParser):
     parse_known_args_orig = argparse.ArgumentParser.parse_known_args
 
     def parse_known_args(self, args=None, namespace=None):
-        if args is None: args = _sys.argv[1:]
+        if args is None: args = sys.argv[1:]
         else: args = list(args)
     
         if namespace is None: namespace = MagiConfig()

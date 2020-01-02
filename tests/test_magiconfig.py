@@ -118,11 +118,11 @@ def test_subparsers():
     parser = magiconfig.ArgumentParser()
     subparsers = parser.add_subparsers()
     parser_one = subparsers.add_parser("one",config_options=magiconfig.MagiConfigOptions(
-        obj = "config_one"
+        obj = "config.one"
     ))
     parser_one.add_argument("-f","--foo", dest="foo", type=str, default="lorem", help="foo arg")
     parser_two = subparsers.add_parser("two",config_options=magiconfig.MagiConfigOptions(
-        obj = "config_two"
+        obj = "config.two"
     ))
     parser_two.add_argument("-b","--bar", dest="bar", type=float, required=True, help="bar arg")
     args_one = parser.parse_args(args=["one","-C","tests/test_config_sub.py"])

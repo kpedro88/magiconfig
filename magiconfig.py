@@ -1,7 +1,14 @@
 import argparse
 import sys, os, imp, uuid
 import six
-from collections import defaultdict
+import collections
+import functools
+
+# from https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-subobjects-chained-properties/31174427#31174427
+def rgetattr(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))
 
 class MagiConfig(argparse.Namespace):
     def write(self, filename, config_obj):
@@ -128,10 +135,10 @@ class ArgumentParser(argparse.ArgumentParser):
         # (from configurati)
         module_id = str(uuid.uuid4())
         module = imp.load_source(module_id, os.path.abspath(config_name))
-        config = getattr(module,self.config_obj)
+        config = rgetattr(module,self.config_obj)
 
         # get dict of dest:action(s) from other_actions
-        dests = defaultdict(list)
+        dests = collections.defaultdict(list)
         for action in self._other_actions:
             dests[action.dest].append(action)
 

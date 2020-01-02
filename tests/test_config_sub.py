@@ -1,6 +1,7 @@
 from magiconfig import MagiConfig
 
-config_one = MagiConfig()
-config_one.foo = 2
-config_two = MagiConfig()
-config_two.bar = 2
+config = MagiConfig()
+config.one = MagiConfig()
+config.one.foo = 2
+config.two = MagiConfig()
+config.two.bar = 2

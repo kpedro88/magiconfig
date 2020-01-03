@@ -156,6 +156,22 @@ def test_config_join():
     )
     return config_one==expected_config
 
+def test_extra_dests():
+    parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+        strict = True
+    )))
+    parser.set_defaults(
+        extra = None,
+    )
+    args = parser.parse_args(args=["-C","tests/test_config3.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+        extra = "blah",
+    )
+    return args==expected
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -168,6 +184,7 @@ if __name__=="__main__":
         ("test_inconsistent_type",test_inconsistent_type),
         ("test_subparsers",test_subparsers),
         ("test_config_join",test_config_join),
+        ("test_extra_dests",test_extra_dests),
     ])
     successful = []
     failed = []

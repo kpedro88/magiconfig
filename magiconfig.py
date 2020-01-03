@@ -85,6 +85,7 @@ class ArgumentParser(argparse.ArgumentParser):
         else: self._config_action = None
         self._other_actions = []
         self._other_defaults = {}
+        self._config_defaults = {}
 
     parse_known_args_orig = argparse.ArgumentParser.parse_known_args
 
@@ -148,7 +149,7 @@ class ArgumentParser(argparse.ArgumentParser):
         unknown_attrs = []
         self._required = []
         for attr,val in six.iteritems(vars(config)):
-            if attr in dests:
+            if attr in dests or attr in self._config_defaults:
                 known_attrs.append(attr)
                 tmp = val
                 # check type if uniquely provided
@@ -188,6 +189,15 @@ class ArgumentParser(argparse.ArgumentParser):
         lines = self.format_help_orig()
         if self._config_action is not None: self._remove_action(self._config_action)
         return lines
+
+    # keep track of non-arg defaults
+    set_defaults_orig = argparse.ArgumentParser.set_defaults
+
+    def set_defaults(self, **kwargs):
+        self.set_defaults_orig(**kwargs)
+
+        arg_dests = [action.dest for action in self._actions]
+        self._config_defaults.update({key:val for key,val in six.iteritems(kwargs) if key not in arg_dests})
 
 # updates to subparsers
 argparse._SubParsersAction.add_parser_orig = argparse._SubParsersAction.add_parser

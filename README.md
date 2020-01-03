@@ -82,6 +82,25 @@ With this config file, the script can be rerun to produce the same output withou
 the need to specify any other command-line arguments:
 `python3 examples/example1.py -C examples/config1_out.py`.
 
+### 2) Subparsers
+
+The script in [examples/example2.py](./examples/example2.py)
+demonstrates how a common config file [examples/config2.py](./examples/config2.py)
+can be used with multiple subparsers.
+
+The parser has two modes defined, `one` (with an argument `foo`)
+and `two` (with an argument `bar`).
+Each subparser mode specifies a different config object;
+in this case, each of these config objects is a member of a top-level config object.
+
+The script can be run in each mode with the same input config file:
+```
+> python examples/example2.py one -C examples/config2.py
+MagiConfig(foo='foo')
+> python examples/example2.py two -C examples/config2.py
+MagiConfig(bar=2.0)
+```
+
 ## Inspirations
 
 This project owes inspiration (and in some cases code) to:

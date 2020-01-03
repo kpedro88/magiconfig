@@ -37,6 +37,51 @@ in addition to the usual command-line arguments.
 
 ## Examples
 
+### 1) Basic setup
+
+The simple script in [examples/example1.py](./examples/example1.py)
+demonstrates the different ways to set values, as well as some of the features of magiconfig.
+
+The help printout for the arguments defined in the script:
+```
+usage: example1.py [-C CONFIG] [-h] [-f FOO] -b BAR [-i]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -C CONFIG, --config CONFIG
+                        name of config file to import (w/ object: config)
+  -f FOO, --foo FOO     foo arg
+  -b BAR, --bar BAR     bar arg
+  -i, --ipsum           ipsum arg
+```
+
+When the script is run as follows:
+```
+python3 examples/example1.py -C examples/config1.py --foo 'foo'
+```
+
+It prints the resulting namespace:
+```
+MagiConfig(bar=3.0, foo='foo', ipsum=False)
+```
+
+Here, the `bar` argument is set by the config file [examples/config1.py](./examples/config1.py),
+the `foo` argument is set on the command line, and the `ipsum` argument retains its default value.
+
+The script also writes the final namespace into a config file `examples/config1_out.py`:
+```python
+from magiconfig import MagiConfig
+
+config = MagiConfig()
+config.bar = 3.0
+config.foo = 'foo'
+config.ipsum = False
+```
+
+With this config file, the script can be rerun to produce the same output without
+the need to specify any other command-line arguments:
+`python3 examples/example1.py -C examples/config1_out.py`.
+
 ## Inspirations
 
 This project owes inspiration (and in some cases code) to:

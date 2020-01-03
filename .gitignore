@@ -131,4 +131,4 @@ dmypy.json
 # custom
 /tests/test_argparse.py
 /tests/test_argparse_magiconfig.py
-
+/examples/config1_out.py

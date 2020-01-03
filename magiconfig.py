@@ -72,7 +72,7 @@ class ArgumentParser(argparse.ArgumentParser):
                 *self.config_args,
                 dest=self._dest,
                 type=str,
-                help="name of config file to import",
+                help="name of config file to import (w/ object: "+self.config_obj+")",
                 required=config_options.required,
                 default=config_options.default if len(config_options.default)>0 else None
             )

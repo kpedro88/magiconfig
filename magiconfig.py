@@ -5,7 +5,7 @@ import collections
 import functools
 
 # from https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-subobjects-chained-properties/31174427#31174427
-def rgetattr(obj, attr, *args):
+def _rgetattr(obj, attr, *args):
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
     return functools.reduce(_getattr, [obj] + attr.split('.'))
@@ -29,6 +29,20 @@ class MagiConfig(argparse.Namespace):
         for attr,val in six.iteritems(vars(other_config)):
             if prefer_other or not hasattr(self,attr):
                 setattr(self,attr,val)
+
+    def __setattr__(self, attr, val):
+        pre, _, post = attr.rpartition('.')
+        if len(pre)>0:
+            if not hasattr(self,pre):
+                object.__setattr__(self,pre,MagiConfig())
+            object.__setattr__(_rgetattr(self,pre), post, val)
+        else:
+            object.__setattr__(self, post, val)
+
+    def __getattr__(self, attr):
+        def _getattr(obj, attr):
+            return obj.__getattribute__(attr)
+        return functools.reduce(_getattr, [self] + attr.split('.'))
 
 class MagiConfigOptions(object):
     # arguments:
@@ -137,18 +151,29 @@ class ArgumentParser(argparse.ArgumentParser):
         # (from configurati)
         module_id = str(uuid.uuid4())
         module = imp.load_source(module_id, os.path.abspath(config_name))
-        config = rgetattr(module,self.config_obj)
+        config = _rgetattr(module,self.config_obj)
 
         # get dict of dest:action(s) from other_actions
         dests = collections.defaultdict(list)
         for action in self._other_actions:
             dests[action.dest].append(action)
 
+        # handle values in sub-configs by restoring dots in keys
+        def flatten_vars(config,pre=""):
+            flat_vars = {}
+            for attr,val in six.iteritems(vars(config)):
+                if isinstance(val,MagiConfig):
+                    flat_vars.update(flatten_vars(val,attr+"."))
+                else:
+                    flat_vars[pre+attr] = val
+            return flat_vars
+
         # loop over vars(config) to populate namespace
         known_attrs = []
         unknown_attrs = []
         self._required = []
-        for attr,val in six.iteritems(vars(config)):
+        flat_vars = flatten_vars(config)
+        for attr,val in six.iteritems(flat_vars):
             if attr in dests or attr in self._config_defaults:
                 known_attrs.append(attr)
                 tmp = val

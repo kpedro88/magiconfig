@@ -172,6 +172,20 @@ def test_extra_dests():
     )
     return args==expected
 
+def test_dot_dests():
+    parser = magiconfig.ArgumentParser(
+        config_options = magiconfig.MagiConfigOptions(
+            strict = True
+        )
+    )
+    parser.add_argument("-f","--foo", dest="one.foo", type=str, default="lorem", help="foo arg")
+    parser.add_argument("-b","--bar", dest="two.bar", type=float, required=True, help="bar arg")
+    args = parser.parse_args(args=["-C","tests/test_config_sub.py"])
+    expected = magiconfig.MagiConfig()
+    expected.one = magiconfig.MagiConfig(foo = '2')
+    expected.two = magiconfig.MagiConfig(bar = 2.0)
+    return args==expected
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -185,6 +199,7 @@ if __name__=="__main__":
         ("test_subparsers",test_subparsers),
         ("test_config_join",test_config_join),
         ("test_extra_dests",test_extra_dests),
+        ("test_dot_dests",test_dot_dests),
     ])
     successful = []
     failed = []

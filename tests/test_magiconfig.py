@@ -161,7 +161,7 @@ def test_extra_dests():
         strict = True
     )))
     parser.set_defaults(
-        extra = None,
+        "extra",
     )
     args = parser.parse_args(args=["-C","tests/test_config3.py"])
     expected = magiconfig.MagiConfig(

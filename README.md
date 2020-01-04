@@ -30,7 +30,8 @@ in addition to the usual command-line arguments.
   * `required`: if the config arg is required when parsing (default: False)
   * `default`: default value for the config file name (default: None)
   * `strict`: reject imported config object if it has unknown attributes (default: False)
-    * additional dests, unrelated to the command-line arguments, can be specified using `ArgumentParser.set_defaults()`
+    * additional dests, unrelated to the command-line arguments, can be specified using `ArgumentParser.set_defaults(*args,**kwargs)`
+    * to specify additional dests without providing default values, provide strings for `*args` in the above method
 * precedence of parameter values: command line > config file > defaults
 * values provided in a config file satisfy the "required" attribute of any such arguments specified in the parser
 * types specified for dests in argparse arguments are enforced for attributes imported from a config file

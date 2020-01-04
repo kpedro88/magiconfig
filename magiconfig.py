@@ -193,11 +193,12 @@ class ArgumentParser(argparse.ArgumentParser):
     # keep track of non-arg defaults
     set_defaults_orig = argparse.ArgumentParser.set_defaults
 
-    def set_defaults(self, **kwargs):
+    def set_defaults(self, *args, **kwargs):
         self.set_defaults_orig(**kwargs)
 
         arg_dests = [action.dest for action in self._actions]
         self._config_defaults.update({key:val for key,val in six.iteritems(kwargs) if key not in arg_dests})
+        self._config_defaults.update({key:None for key in args})
 
 # updates to subparsers
 argparse._SubParsersAction.add_parser_orig = argparse._SubParsersAction.add_parser

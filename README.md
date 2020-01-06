@@ -108,7 +108,7 @@ MagiConfig(bar=2.0)
 
 In a config-driven script, it may be desirable to encapsulate many parameters only in the config file,
 while supporting only parameters related to running the script as command-line arguments.
-The script in [examples/example2.py](./examples/example3.py) is an example.
+The script in [examples/example3.py](./examples/example3.py) is an example.
 
 It shows how an organized schema with different categories and parameters can be defined and transmitted to the parser.
 This allows the parser to use strict mode to validate input configurations, rejecting any config with unknown parameters.

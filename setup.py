@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="magiconfig",
-    version="1.0.1",
+    version="1.0.2",
     author="Kevin Pedro",
     author_email="kpedro88@gmail.com",
     description="An extension of argparse to configure Python with Python",
@@ -22,7 +22,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=2.7, >=3.6',
+    python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*',
     license="MIT",
     keywords="config, configuration, argparse, parameters, magiconfig",
     install_requires=[

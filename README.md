@@ -83,7 +83,7 @@ config.ipsum = False
 
 With this config file, the script can be rerun to produce the same output without
 the need to specify any other command-line arguments:
-`python3 examples/example1.py -C examples/config1_out.py`.
+`python examples/example1.py -C examples/config1_out.py`.
 
 ### 2) Subparsers
 
@@ -102,6 +102,20 @@ The script can be run in each mode with the same input config file:
 MagiConfig(foo='foo')
 > python examples/example2.py two -C examples/config2.py
 MagiConfig(bar=2.0)
+```
+
+### 3) Config-driven
+
+In a config-driven script, it may be desirable to encapsulate many parameters only in the config file,
+while supporting only parameters related to running the script as command-line arguments.
+The script in [examples/example2.py](./examples/example3.py) is an example.
+
+It shows how an organized schema with different categories and parameters can be defined and transmitted to the parser.
+This allows the parser to use strict mode to validate input configurations, rejecting any config with unknown parameters.
+The config file [examples/config3.py](./examples/config3.py) can be used with the script:
+```
+> python examples/example3.py -C examples/config3.py -v
+MagiConfig(dataset=MagiConfig(background='background', path='/data', signal='signal'), hyper=MagiConfig(learning_rate=0.1, loss='log'), training=MagiConfig(size=0.5, weights=[1, 1]), verbose=True)
 ```
 
 ## Inspirations

@@ -121,6 +121,41 @@ The config file [examples/config3.py](./examples/config3.py) can be used with th
 MagiConfig(dataset=MagiConfig(background='background', path='/data', signal='signal'), hyper=MagiConfig(learning_rate=0.1, loss='log'), training=MagiConfig(size=0.5, weights=[1, 1]), verbose=True)
 ```
 
+### 4) Scaling up
+
+When scaling up an application to handle a large number of possible inputs,
+a typical pattern is that some of the parameters are common,
+while other parameters may be unique to each input.
+Rather than requiring a separate config file for each possible input,
+all of the config objects can be generated within a single Python file.
+The script in [examples/example4.py](./examples/example4.py)
+allows the config object name to be specified on the command line;
+other config objects in the config file are just ignored.
+
+The help message for this script is:
+```
+usage: example4.py [-C CONFIG] [-O OBJ] [-h] [-f FOO] -b BAR -i INPUT
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -C CONFIG, --config CONFIG
+                        name of config file to import (w/ object from -O,--
+                        obj)
+  -O OBJ, --obj OBJ     name of object to import from config file
+  -f FOO, --foo FOO     foo arg
+  -b BAR, --bar BAR     bar arg
+  -i INPUT, --input INPUT
+                        input arg
+```
+
+The script can be run with different inputs all contained in [examples/config4.py](./examples/config4.py):
+```
+> python3 examples/example4.py -C examples/config4.py -O config.a
+MagiConfig(bar=3.0, foo='foo', input='a')
+> python3 examples/example4.py -C examples/config4.py -O config.b
+MagiConfig(bar=3.0, foo='foo', input='b')
+```
+
 ## Inspirations
 
 This project owes inspiration (and in some cases code) to:

@@ -27,6 +27,7 @@ in addition to the usual command-line arguments.
 * options related to the Python config file and object are contained in the class `MagiConfigOptions`:
   * `args`: the command-line arguments to indicate the config file (default: "-C", "--config")
   * `obj`: name of the `MagiConfig` object to be imported from the config file (default: "config")
+  * `obj_args`: optional command-line arguments to indicate the object to be imported (default: `obj`)
   * `required`: if the config arg is required when parsing (default: False)
   * `default`: default value for the config file name (default: None)
   * `strict`: reject imported config object if it has unknown attributes (default: False)

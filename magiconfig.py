@@ -48,15 +48,17 @@ class MagiConfigOptions(object):
     # arguments:
     # args = arguments used to indicate config file
     # obj = string identifying magiconfig object in module imported from config file
+    # obj_args = optional argument to specify obj on command line
     # required = require config_arg to be provided when parsing
     # default = default value for config filename
     # strict = reject imported config if it has unknown keys
-    def __init__(self, args=["-C","--config"], obj="config", required=False, default="", strict=False):
-        if len(obj)==0:
-            raise ValueError("obj must be specified")
+    def __init__(self, args=["-C","--config"], obj="config", obj_args=None, required=False, default="", strict=False):
+        if (obj is None or len(obj)==0) and obj_args is None:
+            raise ValueError("obj or obj_args must be specified")
 
         self.args = args
         self.obj = obj
+        self.obj_args = obj_args
         self.required = required
         self.default = default
         self.strict = strict
@@ -71,32 +73,46 @@ class ArgumentParser(argparse.ArgumentParser):
         if config_options is not None:
             self.config_args = config_options.args
             self.config_obj = config_options.obj
+            self.config_obj_args = config_options.obj_args
             self.strict = config_options.strict
             self._dest = "config"
+            self._obj_dest = "obj"
         else:
             self.config_args = None
             self.config_obj = None
             self.strict = False
             self._dest = ""
+            self._obj_dest = ""
 
         # set up config arg(s) if any
         # dest is fixed because it is only used in internal namespace
         if self.config_args is not None and len(self.config_args)>0:
-            self._config_action = self.add_argument(
+            self._config_actions = []
+            self._config_actions.append(self.add_argument(
                 *self.config_args,
                 dest=self._dest,
                 type=str,
-                help="name of config file to import (w/ object: "+self.config_obj+")",
+                help="name of config file to import (w/ object"+(": "+self.config_obj if self.config_obj_args is None else " from "+",".join(self.config_obj_args))+")",
                 required=config_options.required,
                 default=config_options.default if len(config_options.default)>0 else None
-            )
+            ))
+            if self.config_obj_args is not None:
+                self._config_actions.append(self.add_argument(
+                    *self.config_obj_args,
+                    dest=self._obj_dest,
+                    type=str,
+                    help="name of object to import from config file",
+                    required=self.config_obj is None,
+                    default=self.config_obj
+                ))
             self._config_option_string_actions = {}
             # keep config action separate from other actions
-            for option_string in self._config_action.option_strings:
-                self._config_option_string_actions[option_string] = self._config_action
-                self._option_string_actions.pop(option_string)
-            self._remove_action(self._config_action)
-        else: self._config_action = None
+            for config_action in self._config_actions:
+                for option_string in config_action.option_strings:
+                    self._config_option_string_actions[option_string] = config_action
+                    self._option_string_actions.pop(option_string)
+                self._remove_action(config_action)
+        else: self._config_actions = None
         self._other_actions = []
         self._other_defaults = {}
         self._config_defaults = {}
@@ -110,11 +126,11 @@ class ArgumentParser(argparse.ArgumentParser):
         if namespace is None: namespace = MagiConfig()
 
         # fall back to default argparse behavior
-        if self._config_action is None:
+        if self._config_actions is None:
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # reset known args to just config_args and parse
-        self._other_actions, self._actions = self._actions, [self._config_action]
+        self._other_actions, self._actions = self._actions, self._config_actions
         self._other_defaults, self._defaults = self._defaults, {}
         self._other_option_string_actions, self._option_string_actions = self._option_string_actions, self._config_option_string_actions
         tmpspace, remaining_args = self.parse_known_args_orig(args=args)
@@ -129,7 +145,7 @@ class ArgumentParser(argparse.ArgumentParser):
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # get namespace as filled by config
-        namespace = self.parse_config(tmpspace.config,namespace=namespace)
+        namespace = self.parse_config(tmpspace.config, tmpspace.obj if hasattr(tmpspace,"obj") else self.config_obj, namespace=namespace)
 
         # restore known args
         self._actions, self._other_actions = self._other_actions, []
@@ -146,12 +162,12 @@ class ArgumentParser(argparse.ArgumentParser):
         # finish
         return tmpspace, remaining_args
 
-    def parse_config(self, config_name, namespace=None):
+    def parse_config(self, config_name, config_obj, namespace=None):
         # import config as module
         # (from configurati)
         module_id = str(uuid.uuid4())
         module = imp.load_source(module_id, os.path.abspath(config_name))
-        config = _rgetattr(module,self.config_obj)
+        config = _rgetattr(module,config_obj)
 
         # get dict of dest:action(s) from other_actions
         dests = collections.defaultdict(list)
@@ -204,15 +220,21 @@ class ArgumentParser(argparse.ArgumentParser):
 
     # include config args in usage string
     def format_usage(self):
-        if self._config_action is not None: self._actions.insert(0,self._config_action)
+        if self._config_actions is not None:
+            self._actions = self._config_actions + self._actions
         lines = self.format_usage_orig()
-        if self._config_action is not None: self._remove_action(self._config_action)
+        if self._config_actions is not None:
+            for config_action in self._config_actions:
+                self._remove_action(config_action)
         return lines
 
     def format_help(self):
-        if self._config_action is not None: self._actions.insert(0,self._config_action)
+        if self._config_actions is not None:
+            self._actions = self._config_actions + self._actions
         lines = self.format_help_orig()
-        if self._config_action is not None: self._remove_action(self._config_action)
+        if self._config_actions is not None:
+            for config_action in self._config_actions:
+                self._remove_action(config_action)
         return lines
 
     # keep track of non-arg defaults

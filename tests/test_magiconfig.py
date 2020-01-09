@@ -186,6 +186,31 @@ def test_dot_dests():
     expected.two = magiconfig.MagiConfig(bar = 2.0)
     return args==expected
 
+def test_obj_arg():
+    parser = make_parser(magiconfig.ArgumentParser(config_options = magiconfig.MagiConfigOptions(
+        obj = "config.one",
+        obj_args = ["-O","--obj"]
+    )))
+    args = parser.parse_args(args=["-C","tests/test_config_sub.py","-O","config.two"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = "lorem",
+        ipsum = False,
+    )
+    return args==expected
+
+def test_obj_arg_nodefault():
+    parser = make_parser(magiconfig.ArgumentParser(config_options = magiconfig.MagiConfigOptions(
+        obj = None,
+        obj_args = ["-O","--obj"]
+    )))
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config_sub.py"])
+    except argparse.ArgumentError:
+        return True
+    else:
+        return False
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -200,6 +225,8 @@ if __name__=="__main__":
         ("test_config_join",test_config_join),
         ("test_extra_dests",test_extra_dests),
         ("test_dot_dests",test_dot_dests),
+        ("test_obj_arg",test_obj_arg),
+        ("test_obj_arg_nodefault",test_obj_arg_nodefault),
     ])
     successful = []
     failed = []

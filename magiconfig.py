@@ -47,18 +47,22 @@ class MagiConfig(argparse.Namespace):
 class MagiConfigOptions(object):
     # arguments:
     # args = arguments used to indicate config file
+    # help = custom help message for config arg
     # obj = string identifying magiconfig object in module imported from config file
     # obj_args = optional argument to specify obj on command line
+    # obj_help = custom help message for obj arg
     # required = require config_arg to be provided when parsing
     # default = default value for config filename
     # strict = reject imported config if it has unknown keys
-    def __init__(self, args=["-C","--config"], obj="config", obj_args=None, required=False, default="", strict=False):
+    def __init__(self, args=["-C","--config"], help=None, obj="config", obj_args=None, obj_help=None, required=False, default="", strict=False):
         if (obj is None or len(obj)==0) and obj_args is None:
             raise ValueError("obj or obj_args must be specified")
 
         self.args = args
+        self.help = help
         self.obj = obj
         self.obj_args = obj_args
+        self.obj_help = obj_help
         self.required = required
         self.default = default
         self.strict = strict
@@ -92,7 +96,7 @@ class ArgumentParser(argparse.ArgumentParser):
                 *self.config_args,
                 dest=self._dest,
                 type=str,
-                help="name of config file to import (w/ object"+(": "+self.config_obj if self.config_obj_args is None else " from "+",".join(self.config_obj_args))+")",
+                help=config_options.help if config_options.help is not None else "name of config file to import (w/ object"+(": "+self.config_obj if self.config_obj_args is None else " from "+",".join(self.config_obj_args))+")",
                 required=config_options.required,
                 default=config_options.default if len(config_options.default)>0 else None
             ))
@@ -101,7 +105,7 @@ class ArgumentParser(argparse.ArgumentParser):
                     *self.config_obj_args,
                     dest=self._obj_dest,
                     type=str,
-                    help="name of object to import from config file",
+                    help=config_options.obj_help if config_options.obj_help is not None else "name of object to import from config file",
                     required=self.config_obj is None,
                     default=self.config_obj
                 ))

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="magiconfig",
-    version="1.0.2",
+    version="1.1.0",
     author="Kevin Pedro",
     author_email="kpedro88@gmail.com",
     description="An extension of argparse to configure Python with Python",

@@ -37,6 +37,7 @@ in addition to the usual command-line arguments.
     * to specify additional dests without providing default values, provide strings for `*args` in the above method
   * `strict_args`: optional command-line arguments to toggle strictness
     * if `strict` above is set to False, providing an arg will toggle it to True; if set to True, will toggle it to False
+  * `strict_help`: custom help message for strict args (optional)
 * precedence of parameter values: command line > config file > defaults
 * values provided in a config file satisfy the "required" attribute of any such arguments specified in the parser
 * types specified for dests in argparse arguments are enforced for attributes imported from a config file

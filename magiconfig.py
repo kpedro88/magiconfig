@@ -55,7 +55,8 @@ class MagiConfigOptions(object):
     # default = default value for config filename
     # strict = reject imported config if it has unknown keys
     # strict_args = optional argument to specify strictness on command line
-    def __init__(self, args=["-C","--config"], help=None, obj="config", obj_args=None, obj_help=None, required=False, default="", strict=False, strict_args=None):
+    # strict_help = custom help message for strict arg
+    def __init__(self, args=["-C","--config"], help=None, obj="config", obj_args=None, obj_help=None, required=False, default="", strict=False, strict_args=None, strict_help=None):
         if (obj is None or len(obj)==0) and obj_args is None:
             raise ValueError("obj or obj_args must be specified")
 
@@ -68,6 +69,7 @@ class MagiConfigOptions(object):
         self.default = default
         self.strict = strict
         self.strict_args = strict_args
+        self.strict_help = strict_help
 
 class ArgumentParser(argparse.ArgumentParser):
     # additional argument:
@@ -119,7 +121,7 @@ class ArgumentParser(argparse.ArgumentParser):
                     *self.config_strict_args,
                     dest=self._strict_dest,
                     action="store_true" if self.config_strict==False else "store_false",
-                    help=("reject" if self.config_strict==False else "accept")+" imported config with unknown attributes",
+                    help=config_options.strict_help if config_options.strict_help is not None else ("reject" if self.config_strict==False else "accept")+" imported config with unknown attributes",
                     default=self.config_strict
                 ))
             self._config_option_string_actions = {}

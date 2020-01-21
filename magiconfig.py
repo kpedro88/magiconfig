@@ -54,7 +54,8 @@ class MagiConfigOptions(object):
     # required = require config_arg to be provided when parsing
     # default = default value for config filename
     # strict = reject imported config if it has unknown keys
-    def __init__(self, args=["-C","--config"], help=None, obj="config", obj_args=None, obj_help=None, required=False, default="", strict=False):
+    # strict_args = optional argument to specify strictness on command line
+    def __init__(self, args=["-C","--config"], help=None, obj="config", obj_args=None, obj_help=None, required=False, default="", strict=False, strict_args=None):
         if (obj is None or len(obj)==0) and obj_args is None:
             raise ValueError("obj or obj_args must be specified")
 
@@ -66,6 +67,7 @@ class MagiConfigOptions(object):
         self.required = required
         self.default = default
         self.strict = strict
+        self.strict_args = strict_args
 
 class ArgumentParser(argparse.ArgumentParser):
     # additional argument:
@@ -78,13 +80,15 @@ class ArgumentParser(argparse.ArgumentParser):
             self.config_args = config_options.args
             self.config_obj = config_options.obj
             self.config_obj_args = config_options.obj_args
-            self.strict = config_options.strict
+            self.config_strict = config_options.strict
+            self.config_strict_args = config_options.strict_args
             self._dest = "config"
             self._obj_dest = "obj"
+            self._strict_dest = "strict"
         else:
             self.config_args = None
             self.config_obj = None
-            self.strict = False
+            self.config_strict = False
             self._dest = ""
             self._obj_dest = ""
 
@@ -109,8 +113,17 @@ class ArgumentParser(argparse.ArgumentParser):
                     required=self.config_obj is None,
                     default=self.config_obj
                 ))
+            if self.config_strict_args is not None:
+                # strict arg switches from the default value
+                self._config_actions.append(self.add_argument(
+                    *self.config_strict_args,
+                    dest=self._strict_dest,
+                    action="store_true" if self.config_strict==False else "store_false",
+                    help=("reject" if self.config_strict==False else "accept")+" imported config with unknown attributes",
+                    default=self.config_strict
+                ))
             self._config_option_string_actions = {}
-            # keep config action separate from other actions
+            # keep config actions separate from other actions
             for config_action in self._config_actions:
                 for option_string in config_action.option_strings:
                     self._config_option_string_actions[option_string] = config_action
@@ -149,7 +162,12 @@ class ArgumentParser(argparse.ArgumentParser):
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # get namespace as filled by config
-        namespace = self.parse_config(tmpspace.config, tmpspace.obj if hasattr(tmpspace,"obj") else self.config_obj, namespace=namespace)
+        namespace = self.parse_config(
+            tmpspace.config,
+            getattr(tmpspace,self._obj_dest) if hasattr(tmpspace,self._obj_dest) else self.config_obj,
+            getattr(tmpspace,self._strict_dest) if hasattr(tmpspace,self._strict_dest) else self.config_strict,
+            namespace=namespace
+        )
 
         # restore known args
         self._actions, self._other_actions = self._other_actions, []
@@ -166,7 +184,7 @@ class ArgumentParser(argparse.ArgumentParser):
         # finish
         return tmpspace, remaining_args
 
-    def parse_config(self, config_name, config_obj, namespace=None):
+    def parse_config(self, config_name, config_obj, config_strict, namespace=None):
         # import config as module
         # (from configurati)
         module_id = str(uuid.uuid4())
@@ -210,7 +228,7 @@ class ArgumentParser(argparse.ArgumentParser):
                 unknown_attrs.append(attr)
 
         # check strict
-        if self.strict and len(unknown_attrs)>0:
+        if config_strict and len(unknown_attrs)>0:
             raise ValueError("Imported config contained unknown attributes: "+','.join(unknown_attrs))
 
         return namespace

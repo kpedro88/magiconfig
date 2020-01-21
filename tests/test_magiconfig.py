@@ -82,6 +82,18 @@ def test_config_strict():
     else:
         return False
 
+def test_config_strict_arg():
+    parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+        strict = False,
+        strict_args = ["--strict"],
+    )))
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config3.py","--strict"])
+    except ValueError:
+        return True
+    else:
+        return False
+
 def test_required_arg():
     parser = make_parser()
     args = parser.parse_args(args=["-C","tests/test_config.py"])
@@ -218,6 +230,7 @@ if __name__=="__main__":
         ("test_config_obj",test_config_obj),
         ("test_config_required",test_config_required),
         ("test_config_strict",test_config_strict),
+        ("test_config_strict_arg",test_config_strict_arg),
         ("test_required_arg",test_required_arg),
         ("test_override",test_override),
         ("test_inconsistent_type",test_inconsistent_type),

@@ -48,25 +48,25 @@ class MagiConfigOptions(object):
     # arguments:
     # args = arguments used to indicate config file
     # help = custom help message for config arg
+    # required = require config_arg to be provided when parsing
+    # default = default value for config filename
     # obj = string identifying magiconfig object in module imported from config file
     # obj_args = optional argument to specify obj on command line
     # obj_help = custom help message for obj arg
-    # required = require config_arg to be provided when parsing
-    # default = default value for config filename
     # strict = reject imported config if it has unknown keys
     # strict_args = optional argument to specify strictness on command line
     # strict_help = custom help message for strict arg
-    def __init__(self, args=["-C","--config"], help=None, obj="config", obj_args=None, obj_help=None, required=False, default="", strict=False, strict_args=None, strict_help=None):
+    def __init__(self, args=["-C","--config"], help=None, required=False, default="", obj="config", obj_args=None, obj_help=None, strict=False, strict_args=None, strict_help=None):
         if (obj is None or len(obj)==0) and obj_args is None:
             raise ValueError("obj or obj_args must be specified")
 
         self.args = args
         self.help = help
+        self.required = required
+        self.default = default
         self.obj = obj
         self.obj_args = obj_args
         self.obj_help = obj_help
-        self.required = required
-        self.default = default
         self.strict = strict
         self.strict_args = strict_args
         self.strict_help = strict_help

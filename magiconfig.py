@@ -180,6 +180,8 @@ class ArgumentParser(argparse.ArgumentParser):
         # restore required actions
         for action in self._required:
             action.required = True
+        # in case this runs again
+        self._required = []
 
         # finish
         return tmpspace, remaining_args

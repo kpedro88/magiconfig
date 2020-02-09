@@ -232,6 +232,27 @@ def test_obj_arg_nodefault():
     else:
         return False
 
+def test_change_config_arg():
+    parser = make_parser()
+    parser.set_config_options(args = ["-c"])
+    args = parser.parse_args(args=["-c","tests/test_config.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+    )
+    return args==expected
+
+def test_remove_config_arg():
+    parser = make_parser()
+    parser.set_config_options(args = None)
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config.py"])
+    except argparse.ArgumentError:
+        return True
+    else:
+        return False
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -250,6 +271,8 @@ if __name__=="__main__":
         ("test_dot_dests",test_dot_dests),
         ("test_obj_arg",test_obj_arg),
         ("test_obj_arg_nodefault",test_obj_arg_nodefault),
+        ("test_change_config_arg",test_change_config_arg),
+        ("test_remove_config_arg",test_remove_config_arg),
     ])
     successful = []
     failed = []

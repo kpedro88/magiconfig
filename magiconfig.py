@@ -125,12 +125,9 @@ class ArgumentParser(argparse.ArgumentParser):
                     default=self.config_strict
                 ))
             self._config_option_string_actions = {}
-            # keep config actions separate from other actions
             for config_action in self._config_actions:
                 for option_string in config_action.option_strings:
                     self._config_option_string_actions[option_string] = config_action
-                    self._option_string_actions.pop(option_string)
-                self._remove_action(config_action)
         else: self._config_actions = None
         self._other_actions = []
         self._other_defaults = {}
@@ -147,6 +144,12 @@ class ArgumentParser(argparse.ArgumentParser):
         # fall back to default argparse behavior
         if self._config_actions is None:
             return self.parse_known_args_orig(args=args,namespace=namespace)
+
+        # separate config actions from other actions
+        for config_action in self._config_actions:
+            for option_string in config_action.option_strings:
+                self._option_string_actions.pop(option_string)
+            self._remove_action(config_action)
 
         # reset known args to just config_args and parse
         self._other_actions, self._actions = self._actions, self._config_actions
@@ -184,6 +187,11 @@ class ArgumentParser(argparse.ArgumentParser):
             action.required = True
         # in case this runs again
         self._required = []
+        # restore config actions
+        for config_action in self._config_actions:
+            for option_string in config_action.option_strings:
+                self._option_string_actions[option_string] = config_action
+            self._actions.append(config_action)
 
         # finish
         return tmpspace, remaining_args

@@ -71,6 +71,15 @@ def test_config_required():
     else:
         return False
 
+def test_conflict_arg():
+    parser = make_parser()
+    try:
+        parser.add_argument("-C", dest="C", type=str, default="conflict", help="conflicting arg")
+    except argparse.ArgumentError:
+        return True
+    else:
+        return False
+
 def test_config_strict():
     parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
         strict = True
@@ -229,6 +238,7 @@ if __name__=="__main__":
         ("test_config_args",test_config_args),
         ("test_config_obj",test_config_obj),
         ("test_config_required",test_config_required),
+        ("test_conflict_arg",test_conflict_arg),
         ("test_config_strict",test_config_strict),
         ("test_config_strict_arg",test_config_strict_arg),
         ("test_required_arg",test_required_arg),

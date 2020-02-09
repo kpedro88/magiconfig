@@ -249,28 +249,6 @@ class ArgumentParser(argparse.ArgumentParser):
     def write_config(self, namespace, filename):
         namespace.write(filename,self.config_obj)
 
-    format_usage_orig = argparse.ArgumentParser.format_usage
-    format_help_orig = argparse.ArgumentParser.format_help
-
-    # include config args in usage string
-    def format_usage(self):
-        if self._config_actions is not None:
-            self._actions = self._config_actions + self._actions
-        lines = self.format_usage_orig()
-        if self._config_actions is not None:
-            for config_action in self._config_actions:
-                self._remove_action(config_action)
-        return lines
-
-    def format_help(self):
-        if self._config_actions is not None:
-            self._actions = self._config_actions + self._actions
-        lines = self.format_help_orig()
-        if self._config_actions is not None:
-            for config_action in self._config_actions:
-                self._remove_action(config_action)
-        return lines
-
     # keep track of non-arg defaults
     set_defaults_orig = argparse.ArgumentParser.set_defaults
 

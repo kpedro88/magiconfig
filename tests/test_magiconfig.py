@@ -244,9 +244,12 @@ if __name__=="__main__":
     successful = []
     failed = []
     for test_name,test in six.iteritems(tests):
-        result = test()
-        if result: successful.append(test_name)
-        else: failed.append(test_name)
+        try:
+            result = test()
+            if result: successful.append(test_name)
+            else: failed.append(test_name)
+        except:
+            failed.append(test_name)
     six.print_("Successful tests: "+', '.join(successful))
     six.print_("Failed tests: "+', '.join(failed))
     if len(failed)>0:

@@ -94,39 +94,71 @@ class ArgumentParser(argparse.ArgumentParser):
         self._config_actions = None
         self._config_option_string_actions = {}
 
+        # get dest w/ check for positionals
+        # based on argparse.add_argument() condition
+        # (args = None is not considered, because dest must be provided in that case)
+        def check_positional(args,default_dest,chars=self.prefix_chars):
+            if args is not None and len(args) == 1 and args[0][0] not in chars:
+                return args[0], True
+            else:
+                return default_dest, False
         # set up config arg(s) if any
         # dest is fixed because it is only used in internal namespace
         if self.config_options is not None and self.config_options.args is not None and len(self.config_options.args)>0:
             self._config_actions = []
-            self._dest = "config"
-            self._obj_dest = "obj"
-            self._strict_dest = "strict"
-            self._config_actions.append(self.add_argument(
-                *self.config_options.args,
-                dest=self._dest,
+            # defaults
+            self._dest, _config_pos = check_positional(self.config_options.args,"config")
+            self._obj_dest, _obj_pos = check_positional(self.config_options.obj_args,"obj")
+            self._strict_dest, _strict_pos = check_positional(self.config_options.strict_args,"strict")
+
+            # exclude dest kwarg for positional
+            _config_kwargs = dict(
                 type=str,
                 help=self.config_options.help if self.config_options.help is not None else "name of config file to import (w/ object"+(": "+self.config_options.obj if self.config_options.obj_args is None else " from "+",".join(self.config_options.obj_args))+")",
-                required=self.config_options.required,
-                default=self.config_options.default if len(self.config_options.default)>0 else None
+                default=self.config_options.default if len(self.config_options.default)>0 else None,
+            )
+            if not _config_pos:
+                _config_kwargs.update(dict(
+                    dest=self._dest,
+                    required=self.config_options.required,
+                ))
+            self._config_actions.append(self.add_argument(
+                *self.config_options.args,
+                **_config_kwargs
             ))
+
             if self.config_options.obj_args is not None:
-                self._config_actions.append(self.add_argument(
-                    *self.config_options.obj_args,
-                    dest=self._obj_dest,
+                _obj_kwargs = dict(
                     type=str,
                     help=self.config_options.obj_help if self.config_options.obj_help is not None else "name of object to import from config file",
-                    required=self.config_options.obj is None,
-                    default=self.config_options.obj
+                    default=self.config_options.obj,
+                )
+                if not _obj_pos:
+                    _obj_kwargs.update(dict(
+                        dest=self._obj_dest,
+                        required=self.config_options.obj is None,
+                    ))
+                self._config_actions.append(self.add_argument(
+                    *self.config_options.obj_args,
+                    **_obj_kwargs
                 ))
+
             if self.config_options.strict_args is not None:
                 # strict arg switches from the default value
-                self._config_actions.append(self.add_argument(
-                    *self.config_options.strict_args,
-                    dest=self._strict_dest,
+                _strict_kwargs = dict(
                     action="store_true" if self.config_options.strict==False else "store_false",
                     help=self.config_options.strict_help if self.config_options.strict_help is not None else ("reject" if self.config_options.strict==False else "accept")+" imported config with unknown attributes",
-                    default=self.config_options.strict
+                    default=self.config_options.strict,
+                )
+                if not _strict_pos:
+                    _strict_kwargs.update(dict(
+                        dest = self._strict_dest
+                    ))
+                self._config_actions.append(self.add_argument(
+                    *self.config_options.strict_args,
+                    **_strict_kwargs
                 ))
+
             for config_action in self._config_actions:
                 for option_string in config_action.option_strings:
                     self._config_option_string_actions[option_string] = config_action
@@ -145,6 +177,16 @@ class ArgumentParser(argparse.ArgumentParser):
                 self._option_string_actions[option_string] = config_action
             self._actions.append(config_action)
 
+    def _reset_known_args(self):
+        self._other_actions, self._actions = self._actions, self._config_actions
+        self._other_defaults, self._defaults = self._defaults, {}
+        self._other_option_string_actions, self._option_string_actions = self._option_string_actions, self._config_option_string_actions
+
+    def _restore_known_args(self):
+        self._actions, self._other_actions = self._other_actions, []
+        self._defaults, self._other_defaults = self._other_defaults, {}
+        self._option_string_actions, self._other_option_string_actions = self._other_option_string_actions, {}
+
     def parse_known_args(self, args=None, namespace=None):
         if args is None: args = sys.argv[1:]
         else: args = list(args)
@@ -159,33 +201,26 @@ class ArgumentParser(argparse.ArgumentParser):
         self._remove_config_args()
 
         # reset known args to just config_args and parse
-        self._other_actions, self._actions = self._actions, self._config_actions
-        self._other_defaults, self._defaults = self._defaults, {}
-        self._other_option_string_actions, self._option_string_actions = self._option_string_actions, self._config_option_string_actions
+        self._reset_known_args()
         tmpspace, remaining_args = self.parse_known_args_orig(args=args)
 
         # fall back to default argparse behavior
         # (config_required already checked above, when parsing for config_arg)
-        if not hasattr(tmpspace,self._dest) or tmpspace.config is None:
+        if getattr(tmpspace,self._dest,None) is None:
             # restore known args and parse
-            self._actions, self._other_actions = self._other_actions, []
-            self._defaults, self._other_defaults = self._other_defaults, {}
-            self._option_string_actions, self._other_option_string_actions = self._other_option_string_actions, {}
+            self._restore_known_args()
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # get namespace as filled by config
         namespace = self.parse_config(
-            tmpspace.config,
-            getattr(tmpspace,self._obj_dest) if hasattr(tmpspace,self._obj_dest) else self.config_options.obj,
-            getattr(tmpspace,self._strict_dest) if hasattr(tmpspace,self._strict_dest) else self.config_options.strict,
+            getattr(tmpspace,self._dest),
+            getattr(tmpspace,self._obj_dest,self.config_options.obj),
+            getattr(tmpspace,self._strict_dest,self.config_options.strict),
             namespace=namespace
         )
 
         # restore known args
-        self._actions, self._other_actions = self._other_actions, []
-        self._defaults, self._other_defaults = self._other_defaults, {}
-        self._option_string_actions, self._other_option_string_actions = self._other_option_string_actions, {}
-
+        self._restore_known_args()
         # call parse_known_args_orig again (supplying namespace from above)
         tmpspace, remaining_args = self.parse_known_args_orig(args=remaining_args,namespace=namespace)
 

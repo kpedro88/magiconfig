@@ -253,6 +253,29 @@ def test_remove_config_arg():
     else:
         return False
 
+def test_config_args_pos():
+    parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+        args=["poscon"],
+    )))
+    args = parser.parse_args(args=["tests/test_config.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+    )
+    return args==expected
+
+def test_change_config_arg_pos():
+    parser = make_parser()
+    parser.set_config_options(args = ["poscon"])
+    args = parser.parse_args(args=["tests/test_config.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+    )
+    return args==expected
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -273,6 +296,8 @@ if __name__=="__main__":
         ("test_obj_arg_nodefault",test_obj_arg_nodefault),
         ("test_change_config_arg",test_change_config_arg),
         ("test_remove_config_arg",test_remove_config_arg),
+        ("test_config_args_pos",test_config_args_pos),
+        ("test_change_config_arg_pos",test_change_config_arg_pos),
     ])
     successful = []
     failed = []

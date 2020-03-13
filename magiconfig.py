@@ -261,7 +261,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     # write namespace into file using config_obj
     def write_config(self, namespace, filename):
-        namespace.write(filename,self.config_obj)
+        namespace.write(filename,self.config_options.obj)
 
     # keep track of non-arg defaults
     set_defaults_orig = argparse.ArgumentParser.set_defaults

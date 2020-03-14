@@ -71,16 +71,36 @@ class MagiConfigOptions(object):
         self.strict_args = strict_args
         self.strict_help = strict_help
 
+# patch base class to remove recursively through all groups
+# this is needed to get correct help messages if set_config_options is called to make changes after initialization
+# todo: option to throw if not found?
+def _remove_action_all(self, action):
+    for group in self._action_groups + self._mutually_exclusive_groups:
+        try:
+            group._remove_action(action)
+        except:
+            continue
+    try:
+        self._actions.remove(action)
+    except:
+        pass
+argparse._ActionsContainer._remove_action = _remove_action_all
+
 class ArgumentParser(argparse.ArgumentParser):
     # additional argument:
     # config_options: default is None, otherwise expects instance of MagiConfigOptions
     def __init__(self, *args, **kwargs):
         self.config_options = kwargs.pop("config_options", None)
+        # these must be defined before the base class constructor is called
+        self._help_actions = []
+        self._help_option_string_actions = {}
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
         self._other_actions = []
         self._other_defaults = {}
         self._config_defaults = {}
+        self._cached_usage = None
+        self._cached_help = None
 
         # initialize config args from options
         self._init_config()
@@ -163,6 +183,30 @@ class ArgumentParser(argparse.ArgumentParser):
                 for option_string in config_action.option_strings:
                     self._config_option_string_actions[option_string] = config_action
 
+    add_argument_orig = argparse.ArgumentParser.add_argument
+
+    # special handling of help action
+    # needed to get help message to print if positional is used for config arg
+    def add_argument(self, *args, **kwargs):
+        # check for the option type in case the registry was changed
+        store_help_action = False
+        if "action" in kwargs:
+            tmpargs = dict(
+                action = kwargs["action"]
+            )
+            action_class = self._pop_action_class(tmpargs)
+            store_help_action = action_class==argparse._HelpAction or action_class==argparse._VersionAction
+
+        # passthrough
+        action = self.add_argument_orig(*args,**kwargs)
+
+        if store_help_action:
+            self._help_actions.append(action)
+            for option_string in action.option_strings:
+                self._help_option_string_actions[option_string] = action
+
+        return action
+
     parse_known_args_orig = argparse.ArgumentParser.parse_known_args
 
     def _remove_config_args(self):
@@ -181,11 +225,37 @@ class ArgumentParser(argparse.ArgumentParser):
         self._other_actions, self._actions = self._actions, self._config_actions
         self._other_defaults, self._defaults = self._defaults, {}
         self._other_option_string_actions, self._option_string_actions = self._option_string_actions, self._config_option_string_actions
+        # this assumes help actions haven't been removed
+        if len(self._help_actions)>0:
+            self._actions = self._actions + self._help_actions
+            self._option_string_actions = dict(self._option_string_actions)
+            self._option_string_actions.update(self._help_option_string_actions)
 
     def _restore_known_args(self):
         self._actions, self._other_actions = self._other_actions, []
         self._defaults, self._other_defaults = self._other_defaults, {}
         self._option_string_actions, self._other_option_string_actions = self._other_option_string_actions, {}
+
+    def _cache_strings(self):
+        self._cached_usage = self.format_usage()
+        self._cached_help = self.format_help()
+
+    def _reset_strings(self):
+        self._cached_usage = None
+        self._cached_help = None
+
+    def _suppress_required(self, actions):
+        required = []
+        for action in actions:
+            if action.required:
+                action.required = False
+                required.append(action)
+        return required
+
+    # this should take the list returned by the previous function
+    def _restore_required(self, actions):
+        for action in actions:
+            action.required = True
 
     def parse_known_args(self, args=None, namespace=None):
         if args is None: args = sys.argv[1:]
@@ -196,6 +266,9 @@ class ArgumentParser(argparse.ArgumentParser):
         # fall back to default argparse behavior
         if self._config_actions is None:
             return self.parse_known_args_orig(args=args,namespace=namespace)
+
+        # cache usage and help strings
+        self._cache_strings()
 
         # separate config actions from other actions
         self._remove_config_args()
@@ -209,6 +282,7 @@ class ArgumentParser(argparse.ArgumentParser):
         if getattr(tmpspace,self._dest,None) is None:
             # restore known args and parse
             self._restore_known_args()
+            self._reset_strings()
             return self.parse_known_args_orig(args=args,namespace=namespace)
 
         # get namespace as filled by config
@@ -221,12 +295,12 @@ class ArgumentParser(argparse.ArgumentParser):
 
         # restore known args
         self._restore_known_args()
+        self._reset_strings()
         # call parse_known_args_orig again (supplying namespace from above)
         tmpspace, remaining_args = self.parse_known_args_orig(args=remaining_args,namespace=namespace)
 
         # restore required actions
-        for action in self._required:
-            action.required = True
+        self._restore_required(self._required)
         # in case this runs again
         self._required = []
         # restore config actions
@@ -243,9 +317,9 @@ class ArgumentParser(argparse.ArgumentParser):
         config = _rgetattr(module,config_obj)
 
         # get dict of dest:action(s) from other_actions
-        dests = collections.defaultdict(list)
+        dests_actions = collections.defaultdict(list)
         for action in self._other_actions:
-            dests[action.dest].append(action)
+            dests_actions[action.dest].append(action)
 
         # handle values in sub-configs by restoring dots in keys
         def flatten_vars(config,pre=""):
@@ -262,21 +336,20 @@ class ArgumentParser(argparse.ArgumentParser):
         unknown_attrs = []
         self._required = []
         flat_vars = flatten_vars(config)
+        possible_required_actions = []
         for attr,val in six.iteritems(flat_vars):
-            if attr in dests or attr in self._config_defaults:
+            if attr in dests_actions or attr in self._config_defaults:
                 known_attrs.append(attr)
                 tmp = val
                 # check type if uniquely provided
-                if len(dests[attr])==1 or len(set([action.type for action in dests[attr]]))==1:
-                    tmp = self._get_value(dests[attr][0],tmp)
+                if len(dests_actions[attr])==1 or len(set([action.type for action in dests_actions[attr]]))==1:
+                    tmp = self._get_value(dests_actions[attr][0],tmp)
                 setattr(namespace,attr,tmp)
-                # remove required attr from associated actions
-                for action in dests[attr]:
-                    if action.required:
-                        action.required = False
-                        self._required.append(action)
+                possible_required_actions.extend(dests_actions[attr])
             else:
                 unknown_attrs.append(attr)
+        # remove required attr from associated actions
+        self._required = self._suppress_required(possible_required_actions)
 
         # check strict
         if config_strict and len(unknown_attrs)>0:
@@ -307,6 +380,22 @@ class ArgumentParser(argparse.ArgumentParser):
         arg_dests = [action.dest for action in self._actions]
         self._config_defaults.update({key:val for key,val in six.iteritems(kwargs) if key not in arg_dests})
         self._config_defaults.update({key:None for key in args})
+
+    format_usage_orig = argparse.ArgumentParser.format_usage
+    format_help_orig = argparse.ArgumentParser.format_help
+
+    # cache usage and help strings in order to include config args
+    def format_usage(self):
+        if self._cached_usage is None:
+            return self.format_usage_orig()
+        else:
+            return self._cached_usage
+
+    def format_help(self):
+        if self._cached_help is None:
+            return self.format_help_orig()
+        else:
+            return self._cached_help
 
 # updates to subparsers
 argparse._SubParsersAction.add_parser_orig = argparse._SubParsersAction.add_parser

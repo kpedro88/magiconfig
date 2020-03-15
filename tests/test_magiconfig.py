@@ -21,7 +21,7 @@ def replace_error_method(arg_parser):
     return arg_parser
 
 def make_parser(parser=None):
-    if parser is None: parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions())
+    if parser is None: parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(),prog="PROG")
     replace_error_method(parser)
     parser.add_argument("-f","--foo", dest="foo", type=str, default="lorem", help="foo arg")
     parser.add_argument("-b","--bar", dest="bar", type=float, required=True, help="bar arg")
@@ -276,6 +276,27 @@ def test_change_config_arg_pos():
     )
     return args==expected
 
+def test_config_usage():
+    parser = make_parser()
+    expected_usage = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n"
+    actual_usage = parser.format_usage()
+    return actual_usage==expected_usage
+
+def test_config_help():
+    parser = make_parser()
+    expected_help = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -C CONFIG, --config CONFIG\n                        name of config file to import (w/ object: config)\n  -f FOO, --foo FOO     foo arg\n  -b BAR, --bar BAR     bar arg\n  -i, --ipsum           ipsum arg\n"
+    return parser.format_help()==expected_help
+
+def test_change_config_arg_pos_usage():
+    parser = make_parser()
+    parser.set_config_options(args = ["poscon"])
+    expected_usage = "usage: PROG [-h] [-f FOO] -b BAR [-i] poscon\n"
+    try:
+        actual_usage = parser.format_usage()
+        return actual_usage==expected_usage
+    except:
+        return false
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -298,6 +319,9 @@ if __name__=="__main__":
         ("test_remove_config_arg",test_remove_config_arg),
         ("test_config_args_pos",test_config_args_pos),
         ("test_change_config_arg_pos",test_change_config_arg_pos),
+        ("test_config_usage",test_config_usage),
+        ("test_config_help",test_config_help),
+        ("test_change_config_arg_pos_usage",test_change_config_arg_pos_usage),
     ])
     successful = []
     failed = []

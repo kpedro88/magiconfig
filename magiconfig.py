@@ -82,6 +82,8 @@ def _remove_action_all(self, action):
             continue
     try:
         self._actions.remove(action)
+        for option_string in action.option_strings:
+            self._option_string_actions.pop(option_string)
     except:
         pass
 argparse._ActionsContainer._remove_action = _remove_action_all
@@ -195,6 +197,7 @@ class ArgumentParser(argparse.ArgumentParser):
                 action = kwargs["action"]
             )
             action_class = self._pop_action_class(tmpargs)
+            # todo: make mutable list of message classes to handle subclassing etc.
             store_help_action = action_class==argparse._HelpAction or action_class==argparse._VersionAction
 
         # passthrough
@@ -211,15 +214,11 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def _remove_config_args(self):
         for config_action in self._config_actions:
-            for option_string in config_action.option_strings:
-                self._option_string_actions.pop(option_string)
             self._remove_action(config_action)
 
     def _restore_config_args(self):
         for config_action in self._config_actions:
-            for option_string in config_action.option_strings:
-                self._option_string_actions[option_string] = config_action
-            self._actions.append(config_action)
+            self._add_action(config_action)
 
     def _reset_known_args(self):
         self._other_actions, self._actions = self._actions, self._config_actions

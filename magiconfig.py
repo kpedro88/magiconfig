@@ -51,13 +51,21 @@ class MagiConfigOptions(object):
     # help = custom help message for config arg
     # required = require config_arg to be provided when parsing
     # default = default value for config filename
+    # dest = destination for config arg
     # obj = string identifying magiconfig object in module imported from config file
     # obj_args = optional argument to specify obj on command line
     # obj_help = custom help message for obj arg
+    # obj_dest = destination for obj arg
     # strict = reject imported config if it has unknown keys
     # strict_args = optional argument to specify strictness on command line
     # strict_help = custom help message for strict arg
-    def __init__(self, args=["-C","--config"], help=None, required=False, default="", obj="config", obj_args=None, obj_help=None, strict=False, strict_args=None, strict_help=None):
+    # strict_dest = destination for strict arg
+    def __init__(
+        self,
+        args=["-C","--config"], help=None, required=False, default="", dest="config",
+        obj="config", obj_args=None, obj_help=None, obj_dest="obj",
+        strict=False, strict_args=None, strict_help=None, strict_dest="strict",
+    ):
         if (obj is None or len(obj)==0) and obj_args is None:
             raise ValueError("obj or obj_args must be specified")
 
@@ -65,12 +73,15 @@ class MagiConfigOptions(object):
         self.help = help
         self.required = required
         self.default = default
+        self.dest = dest
         self.obj = obj
         self.obj_args = obj_args
         self.obj_help = obj_help
+        self.obj_dest = obj_dest
         self.strict = strict
         self.strict_args = strict_args
         self.strict_help = strict_help
+        self.strict_dest = strict_dest
 
 # patch base class to remove recursively through all groups
 # this is needed to get correct help messages if set_config_options is called to make changes after initialization
@@ -125,9 +136,9 @@ class ArgumentParser(argparse.ArgumentParser):
         if self.config_options is not None and self.config_options.args is not None and len(self.config_options.args)>0:
             self._config_actions = []
             # defaults
-            self._dest, _config_pos = check_positional(self.config_options.args,"config")
-            self._obj_dest, _obj_pos = check_positional(self.config_options.obj_args,"obj")
-            self._strict_dest, _strict_pos = check_positional(self.config_options.strict_args,"strict")
+            self._dest, _config_pos = check_positional(self.config_options.args,self.config_options.dest)
+            self._obj_dest, _obj_pos = check_positional(self.config_options.obj_args,self.config_options.obj_dest)
+            self._strict_dest, _strict_pos = check_positional(self.config_options.strict_args,self.config_options.strict_dest)
             self._config_dests = [self._dest, self._obj_dest, self._strict_dest]
 
             # exclude dest kwarg for positional

@@ -121,7 +121,6 @@ class ArgumentParser(argparse.ArgumentParser):
         self._obj_dest = ""
         self._strict_dest = ""
         self._config_actions = None
-        self._config_option_string_actions = {}
 
         # get dest w/ check for positionals
         # based on argparse.add_argument() condition
@@ -195,10 +194,6 @@ class ArgumentParser(argparse.ArgumentParser):
                     *self.config_options.strict_args,
                     **_strict_kwargs
                 ))
-
-            for config_action in self._config_actions:
-                for option_string in config_action.option_strings:
-                    self._config_option_string_actions[option_string] = config_action
 
     parse_known_args_orig = argparse.ArgumentParser.parse_known_args
 

@@ -297,6 +297,26 @@ def test_change_config_arg_pos_usage():
     except:
         return false
 
+def test_config_parse_twice():
+    parser = make_parser()
+    args = parser.parse_args(args=["-C","tests/test_config.py"])
+    args = parser.parse_args(args=["-C","tests/test_config.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+    )
+    return args==expected
+
+def test_config_usage_twice():
+    parser = make_parser()
+    expected_usage = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n"
+    actual_usage = parser.format_usage()
+    args = parser.parse_args(args=["-C","tests/test_config.py"])
+    args = parser.parse_args(args=["-C","tests/test_config.py"])
+    actual_usage2 = parser.format_usage()
+    return actual_usage==expected_usage and actual_usage2==expected_usage
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -322,6 +342,8 @@ if __name__=="__main__":
         ("test_config_usage",test_config_usage),
         ("test_config_help",test_config_help),
         ("test_change_config_arg_pos_usage",test_change_config_arg_pos_usage),
+        ("test_config_parse_twice",test_config_parse_twice),
+        ("test_config_usage_twice",test_config_usage_twice),
     ])
     successful = []
     failed = []

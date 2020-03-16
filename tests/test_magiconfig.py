@@ -317,6 +317,29 @@ def test_config_usage_twice():
     actual_usage2 = parser.format_usage()
     return actual_usage==expected_usage and actual_usage2==expected_usage
 
+def test_remove_arg():
+    parser = make_parser()
+    parser.remove_argument('-b',keep=True)
+    expected_usage = "usage: PROG [-h] [-C CONFIG] [-f FOO] --bar BAR [-i]\n"
+    actual_usage = parser.format_usage()
+    return actual_usage==expected_usage
+
+def test_remove_action():
+    parser = make_parser()
+    parser.remove_argument('-b')
+    expected_help = "usage: PROG [-h] [-C CONFIG] [-f FOO] [-i]\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -C CONFIG, --config CONFIG\n                        name of config file to import (w/ object: config)\n  -f FOO, --foo FOO     foo arg\n  -i, --ipsum           ipsum arg\n"
+    actual_help = parser.format_help()
+    return actual_help==expected_help
+
+def test_remove_unknown_arg():
+    parser = make_parser()
+    try:
+        parser.remove_argument('-x')
+    except:
+        return True
+    else:
+        return False
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -344,6 +367,9 @@ if __name__=="__main__":
         ("test_change_config_arg_pos_usage",test_change_config_arg_pos_usage),
         ("test_config_parse_twice",test_config_parse_twice),
         ("test_config_usage_twice",test_config_usage_twice),
+        ("test_remove_arg",test_remove_arg),
+        ("test_remove_action",test_remove_action),
+        ("test_remove_unknown_arg",test_remove_unknown_arg),
     ])
     successful = []
     failed = []

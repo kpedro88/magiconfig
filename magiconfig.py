@@ -85,19 +85,22 @@ class MagiConfigOptions(object):
 
 # patch base class to remove recursively through all groups
 # this is needed to get correct help messages if set_config_options is called to make changes after initialization
-# todo: option to throw if not found?
-def _remove_action_all(self, action):
-    for group in self._action_groups + self._mutually_exclusive_groups:
-        try:
-            group._remove_action(action)
-        except:
-            continue
+def _remove_action_all(self, action, throw=True):
     try:
         self._actions.remove(action)
         for option_string in action.option_strings:
             self._option_string_actions.pop(option_string)
+        if hasattr(self,"_dests_actions"): self._dests_actions[action.dest].remove(action)
     except:
-        pass
+        if throw: raise
+        else: pass
+    # check all groups -> never throw
+    for group in self._action_groups + self._mutually_exclusive_groups:
+        try:
+            group._group_actions.remove(action)
+            group._remove_action(action,throw=False)
+        except:
+            continue
 argparse._ActionsContainer._remove_action = _remove_action_all
 
 class ArgumentParser(argparse.ArgumentParser):
@@ -105,6 +108,8 @@ class ArgumentParser(argparse.ArgumentParser):
     # config_options: default is None, otherwise expects instance of MagiConfigOptions
     def __init__(self, *args, **kwargs):
         self.config_options = kwargs.pop("config_options", None)
+        # must be defined before base class constructor is called
+        self._dests_actions = collections.defaultdict(list)
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
         self._config_defaults = {}
@@ -116,7 +121,7 @@ class ArgumentParser(argparse.ArgumentParser):
         # reset relevant members
         if self._config_actions is not None:
             for config_action in self._config_actions:
-                self._remove_action(config_action)
+                self._remove_action(config_action,throw=False)
         self._dest = ""
         self._obj_dest = ""
         self._strict_dest = ""
@@ -271,12 +276,6 @@ class ArgumentParser(argparse.ArgumentParser):
         module = imp.load_source(module_id, os.path.abspath(config_name))
         config = _rgetattr(module,config_obj)
 
-        # get dict of dest:action(s) from other_actions
-        dests_actions = collections.defaultdict(list)
-        for action in self._actions:
-            if action not in self._config_actions:
-                dests_actions[action.dest].append(action)
-
         # handle values in sub-configs by restoring dots in keys
         def flatten_vars(config,pre=""):
             flat_vars = {}
@@ -288,20 +287,18 @@ class ArgumentParser(argparse.ArgumentParser):
             return flat_vars
 
         # loop over vars(config) to populate namespace
-        known_attrs = []
         unknown_attrs = []
         self._required = []
         flat_vars = flatten_vars(config)
         possible_required_actions = []
         for attr,val in six.iteritems(flat_vars):
-            if attr in dests_actions or attr in self._config_defaults:
-                known_attrs.append(attr)
+            if attr in self._dests_actions or attr in self._config_defaults:
                 tmp = val
                 # check type if uniquely provided
-                if len(dests_actions[attr])==1 or len(set([action.type for action in dests_actions[attr]]))==1:
-                    tmp = self._get_value(dests_actions[attr][0],tmp)
+                if len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1:
+                    tmp = self._get_value(self._dests_actions[attr][0],tmp)
                 setattr(namespace,attr,tmp)
-                possible_required_actions.extend(dests_actions[attr])
+                possible_required_actions.extend(self._dests_actions[attr])
             else:
                 unknown_attrs.append(attr)
         # remove required attr from associated actions
@@ -333,9 +330,41 @@ class ArgumentParser(argparse.ArgumentParser):
     def set_defaults(self, *args, **kwargs):
         self.set_defaults_orig(**kwargs)
 
-        arg_dests = [action.dest for action in self._actions]
-        self._config_defaults.update({key:val for key,val in six.iteritems(kwargs) if key not in arg_dests})
-        self._config_defaults.update({key:None for key in args})
+        self._config_defaults.update({key:val for key,val in six.iteritems(kwargs) if key not in self._dests_actions})
+        self._config_defaults.update({key:None for key in args if key not in self._dests_actions})
+
+    # keep map of dest:action(s)
+    _add_action_orig = argparse.ArgumentParser._add_action
+
+    def _add_action(self, action):
+        action = self._add_action_orig(action)
+        self._dests_actions[action.dest].append(action)
+        return action
+
+    # allow removing single argument
+    # for optional arguments: if keep is true, just removes the single specified arg; otherwise, removes entire action
+    # for positional arguments, arg=dest, and all positional actions w/ that dest are removed
+    def remove_argument(self, arg, keep=False):
+        # check per arg whether positional or optional
+        found = False
+        if arg[0] in self.prefix_chars:
+            # optional, check option strings
+            if arg in self._option_string_actions:
+                action = self._option_string_actions.pop(arg)
+                action.option_strings.remove(arg)
+                if not keep or len(action.option_strings)==0:
+                    self._remove_action(action)
+                found = True
+        else:
+            # positional, check dests
+            if arg in self._dests_actions:
+                for action in self._dests_actions[arg]:
+                    # remove only positional
+                    if len(action.option_strings)==0:
+                        self._dests_actions[arg].remove(action)
+                found = True
+        if not found:
+            self.error("attempt to remove unrecognized argument: {}".format(arg))
 
 # updates to subparsers
 argparse._SubParsersAction.add_parser_orig = argparse._SubParsersAction.add_parser

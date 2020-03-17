@@ -2,6 +2,38 @@
 
 Configure Python with Python.
 
+Table of Contents
+=================
+* [Overview](#overview)
+* [Philosophy](#philosophy)
+* [Features](#features)
+   * [ArgumentParser](#argumentparser)
+      * [Constructor](#constructor)
+      * [parse_args(), parse_known_args()](#parse_args-parse_known_args)
+      * [parse_config(config_name, config_obj, config_strict, namespace=None)](#parse_configconfig_name-config_obj-config_strict-namespacenone)
+      * [set_config_options(**kwargs)](#set_config_optionskwargs)
+      * [write_config(namespace, filename)](#write_confignamespace-filename)
+      * [add_config_only(*args, **kwargs)](#add_config_onlyargs-kwargs)
+      * [remove_config_only(arg)](#remove_config_onlyarg)
+      * [remove_argument(arg, keep=False)](#remove_argumentarg-keepfalse)
+   * [MagiConfigOptions](#magiconfigoptions)
+      * [Constructor](#constructor-1)
+   * [MagiConfig](#magiconfig-1)
+      * [write(filename, config_obj)](#writefilename-config_obj)
+      * [join(other_config, prefer_other=False)](#joinother_config-prefer_otherfalse)
+      * [getattr(), setattr()](#getattr-setattr)
+   * [Other](#other)
+      * [Subparser aliases](#subparser-aliases)
+      * [Convenience](#convenience)
+* [Examples](#examples)
+   * [1) Basic setup](#1-basic-setup)
+   * [2) Subparsers](#2-subparsers)
+   * [3) Config-driven](#3-config-driven)
+   * [4) Scaling up](#4-scaling-up)
+* [Inspirations](#inspirations)
+
+(Created by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc))
+
 ## Overview
 
 magiconfig is an extension of argparse that stops the

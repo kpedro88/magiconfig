@@ -86,7 +86,7 @@ def test_config_strict():
     )))
     try:
         args = parser.parse_args(args=["-C","tests/test_config3.py"])
-    except ValueError:
+    except magiconfig.MagiConfigError:
         return True
     else:
         return False
@@ -98,7 +98,7 @@ def test_config_strict_arg():
     )))
     try:
         args = parser.parse_args(args=["-C","tests/test_config3.py","--strict"])
-    except ValueError:
+    except magiconfig.MagiConfigError:
         return True
     else:
         return False

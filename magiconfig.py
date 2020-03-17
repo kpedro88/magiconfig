@@ -11,10 +11,14 @@ def _rgetattr(obj, attr, *args):
         return getattr(obj, attr, *args)
     return functools.reduce(_getattr, [obj] + attr.split('.'))
 
+# denotes MagiConfig-specific errors
+class MagiConfigError(Exception):
+    pass
+
 class MagiConfig(argparse.Namespace):
     def write(self, filename, config_obj):
         if len(config_obj)==0:
-            raise ValueError("config_obj must be specified")
+            raise MagiConfigError("config_obj must be specified")
         # write namespace into file
         with open(filename,'w') as outfile:
             lines = []
@@ -67,7 +71,7 @@ class MagiConfigOptions(object):
         strict=False, strict_args=None, strict_help=None, strict_dest="strict",
     ):
         if (obj is None or len(obj)==0) and obj_args is None:
-            raise ValueError("obj or obj_args must be specified")
+            raise MagiConfigError("obj or obj_args must be specified")
 
         self.args = args
         self.help = help
@@ -316,11 +320,11 @@ class ArgumentParser(argparse.ArgumentParser):
         # check missing required config-only args
         config_only_missing = self._config_only_required - set([attr for attr in flat_vars])
         if len(config_only_missing)>0:
-            raise ValueError("Imported config missing required attributes: "+','.join(sorted(list(config_only_missing))))
+            raise MagiConfigError("Imported config missing required attributes: "+','.join(sorted(list(config_only_missing))))
 
         # check strict
         if config_strict and len(unknown_attrs)>0:
-            raise ValueError("Imported config contained unknown attributes: "+','.join(unknown_attrs))
+            raise MagiConfigError("Imported config contained unknown attributes: "+','.join(unknown_attrs))
 
         return namespace
 
@@ -329,7 +333,7 @@ class ArgumentParser(argparse.ArgumentParser):
         # modify config options
         for key,val in six.iteritems(kwargs):
             if hasattr(self.config_options,key): setattr(self.config_options,key,val)
-            else: raise ValueError("Attempt to set invalid config option: "+key)
+            else: raise MagiConfigError("Attempt to set invalid config option: "+key)
 
         # reinitialize
         self._init_config()
@@ -347,7 +351,7 @@ class ArgumentParser(argparse.ArgumentParser):
     def add_config_only(self, *args, **kwargs):
         # check for existing dests
         existing_dests = [arg for arg in list(args) + list(kwargs) if arg in self._dests_actions]
-        if len(existing_dests)>0: raise ValueError("the following dests are already used by regular (not config-only) args: "+', '.join(existing_dests))
+        if len(existing_dests)>0: raise MagiConfigError("the following dests are already used by regular (not config-only) args: "+', '.join(existing_dests))
 
         self._config_only.update(kwargs)
         self._config_only.update({key:None for key in args})

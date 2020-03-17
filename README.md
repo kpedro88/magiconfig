@@ -22,6 +22,7 @@ Table of Contents
       * [write(filename, config_obj)](#writefilename-config_obj)
       * [join(other_config, prefer_other=False)](#joinother_config-prefer_otherfalse)
       * [getattr(), setattr()](#getattr-setattr)
+   * [MagiConfigError](#magiconfigerror)
    * [Other](#other)
       * [Subparser aliases](#subparser-aliases)
       * [Convenience](#convenience)
@@ -52,7 +53,7 @@ in addition to the usual command-line arguments.
 
 magiconfig is compatible with both Python 2 and Python 3.
 It provides a custom [`ArgumentParser`](#ArgumentParser) class, which is a drop-in replacement for `argparse.ArgumentParser`.
-It also provides [`MagiConfig`](#MagiConfig-1) and [`MagiConfigOptions`](#MagiConfigOptions) classes.
+It also provides [`MagiConfig`](#MagiConfig-1), [`MagiConfigOptions`](#MagiConfigOptions), and [`MagiConfigError`](#MagiConfigError) classes.
 
 ### ArgumentParser
 
@@ -78,13 +79,13 @@ This is mainly an internal function used in `parse_known_args()`, but like that 
 * `config_strict`: whether to reject imported config object if it has unknown attributes
 * `namespace`: `Namespace` object to append to, if any
 
-Raises `ValueError` if any required config-only arguments are missing or if `config_strict` is `True` and the imported config has unknown attributes.
+Raises [`MagiConfigError`](#MagiConfigError) if any required config-only arguments are missing or if `config_strict` is `True` and the imported config has unknown attributes.
 
 #### `set_config_options(**kwargs)`
 
 This function allows changing the config options after the parser is initialized.
 It accepts all parameters that can be used to construct an instance of [`MagiConfigOptions`](#MagiConfigOptions).
-Raises `ValueError` if any other parameters are provided.
+Raises [`MagiConfigError`](#MagiConfigError) if any other parameters are provided.
 
 #### `write_config(namespace, filename, obj=None)`
 
@@ -101,7 +102,7 @@ This interface allows adding dests that are only provided by the config, not by 
 * `args`: no default value, not required
 * `**kwargs`: default value OR required (value=`None`)
 
-Raises `ValueError` if any dests have already been used by arguments (actions) added to the parser.
+Raises [`MagiConfigError`](#MagiConfigError) if any dests have already been used by arguments (actions) added to the parser.
 Similarly, `add_argument()` now raises `ArgumentError` if it specifies a dest that has already been added as config-only by this function.
 
 #### `remove_config_only(arg)`
@@ -171,6 +172,10 @@ print(x)
 returns: `MagiConfig(y=MagiConfig(z='test'))`
 
 This enables obtaining dests from nested configs by using dots in the dest names.
+
+### MagiConfigError
+
+This class derives from `Exception` and denotes magiconfig-specific errors.
 
 ### Other
 

@@ -108,6 +108,7 @@ class ArgumentParser(argparse.ArgumentParser):
     # config_options: default is None, otherwise expects instance of MagiConfigOptions
     def __init__(self, *args, **kwargs):
         self.config_options = kwargs.pop("config_options", None)
+        self._config_only_help = kwargs.pop("config_only_help", True)
         # must be defined before base class constructor is called
         self._dests_actions = collections.defaultdict(list)
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
@@ -377,6 +378,55 @@ class ArgumentParser(argparse.ArgumentParser):
                 found = True
         if not found:
             self.error("attempt to remove unrecognized argument: {}".format(arg))
+
+    # modified to include config-only args
+    def format_help(self):
+        formatter = self._get_formatter()
+
+        # usage
+        formatter.add_usage(self.usage, self._actions,
+                            self._mutually_exclusive_groups)
+
+        # description
+        formatter.add_text(self.description)
+
+        # positionals, optionals and user-defined groups
+        for action_group in self._action_groups:
+            formatter.start_section(action_group.title)
+            formatter.add_text(action_group.description)
+            formatter.add_arguments(action_group._group_actions)
+            formatter.end_section()
+
+        # config-only args
+        if len(self._config_only)>0 and self._config_only_help:
+            formatter.start_section("config-only arguments")
+            # convert to fake actions to make use of existing HelpFormatter methods
+            config_only_actions = []
+            for arg in sorted(self._config_only):
+                kwarg = dict(
+                    option_strings = [],
+                    dest = arg,
+                )
+                if arg in self._config_only_required:
+                    kwarg.update(
+                        required = True,
+                        help = "(required)",
+                    )
+                elif self._config_only[arg] is not None:
+                    kwarg.update(
+                        default = self._config_only[arg],
+                        nargs = argparse.OPTIONAL,
+                        help = " ", # must be non-None string to activate default formatting
+                    )
+                config_only_actions.append(argparse._StoreAction(**kwarg))
+            formatter.add_arguments(config_only_actions)
+            formatter.end_section()
+
+        # epilog
+        formatter.add_text(self.epilog)
+
+        # determine help from format above
+        return formatter.format_help()
 
 # updates to subparsers
 argparse._SubParsersAction.add_parser_orig = argparse._SubParsersAction.add_parser

@@ -371,6 +371,23 @@ def test_config_only_remove():
     else:
         return False
 
+def test_config_only_help():
+    parser = make_parser(magiconfig.ArgumentParser(
+        config_options=magiconfig.MagiConfigOptions(
+            strict = True
+        ),
+        prog="PROG",
+        formatter_class=magiconfig.ArgumentDefaultsHelpFormatter,
+    ))
+    parser.add_config_only(
+        "arg1",
+        arg2=None,
+        arg3="test",
+    )
+    expected_help = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -C CONFIG, --config CONFIG\n                        name of config file to import (w/ object: config)\n                        (default: None)\n  -f FOO, --foo FOO     foo arg (default: lorem)\n  -b BAR, --bar BAR     bar arg (default: None)\n  -i, --ipsum           ipsum arg (default: False)\n\nconfig-only arguments:\n  arg1\n  arg2                  (required)\n  arg3                  (default: test)\n"
+    actual_help = parser.format_help()
+    return expected_help==actual_help
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -402,6 +419,7 @@ if __name__=="__main__":
         ("test_remove_action",test_remove_action),
         ("test_config_only_required",test_config_only_required),
         ("test_config_only_remove",test_config_only_remove),
+        ("test_config_only_help",test_config_only_help),
     ])
     successful = []
     failed = []

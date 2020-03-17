@@ -101,6 +101,9 @@ This interface allows adding dests that are only provided by the config, not by 
 * `args`: no default value, not required
 * `**kwargs`: default value OR required (value=`None`)
 
+Raises `ValueError` if any dests have already been used by arguments (actions) added to the parser.
+Similarly, `add_argument()` now raises `ArgumentError` if it specifies a dest that has already been added as config-only by this function.
+
 #### `remove_config_only(arg)`
 
 * `arg`: name of config-only arg to remove

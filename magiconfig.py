@@ -108,9 +108,9 @@ class ArgumentParser(argparse.ArgumentParser):
         self._config_only_help = kwargs.pop("config_only_help", True)
         # must be defined before base class constructor is called
         self._dests_actions = collections.defaultdict(list)
+        self._config_only = {}
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
-        self._config_only = {}
         self._config_only_required = set()
 
         # initialize config args from options
@@ -345,6 +345,10 @@ class ArgumentParser(argparse.ArgumentParser):
     # args: no default value, not required
     # kwargs: default value OR required (value=None)
     def add_config_only(self, *args, **kwargs):
+        # check for existing dests
+        existing_dests = [arg for arg in list(args) + list(kwargs) if arg in self._dests_actions]
+        if len(existing_dests)>0: raise ValueError("the following dests are already used by regular (not config-only) args: "+', '.join(existing_dests))
+
         self._config_only.update(kwargs)
         self._config_only.update({key:None for key in args})
 
@@ -360,6 +364,9 @@ class ArgumentParser(argparse.ArgumentParser):
     _add_action_orig = argparse.ArgumentParser._add_action
 
     def _add_action(self, action):
+        # check against config-only
+        if action.dest in self._config_only: raise argparse.ArgumentError(action, "dest {} already specified as config-only".format(action.dest))
+
         action = self._add_action_orig(action)
         self._dests_actions[action.dest].append(action)
         return action

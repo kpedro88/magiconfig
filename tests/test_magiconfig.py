@@ -391,6 +391,25 @@ def test_config_only_help():
     actual_help = parser.format_help()
     return expected_help==actual_help
 
+def test_config_only_already_used():
+    parser = make_parser()
+    try:
+        parser.add_config_only("bar")
+    except:
+        return True
+    else:
+        return False
+
+def test_dest_already_config_only():
+    parser = make_parser()
+    parser.add_config_only("arg1")
+    try:
+        parser.add_argument("-a","--arg", dest="arg1", type=str, default="", help="arg1")
+    except:
+        return True
+    else:
+        return False
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -424,6 +443,8 @@ if __name__=="__main__":
         ("test_config_only_required",test_config_only_required),
         ("test_config_only_remove",test_config_only_remove),
         ("test_config_only_help",test_config_only_help),
+        ("test_config_only_already_used",test_config_only_already_used),
+        ("test_dest_already_config_only",test_dest_already_config_only),
     ])
     successful = []
     failed = []

@@ -13,43 +13,138 @@ bypassing the limitations of text-based configuration languages.
 ## Philosophy
 
 This module treats argparse as an engine that ultimately provides a namespace of attributes ("dests") to be consumed by user applications.
-With magiconfig, these attributes can be provided by an imported `MagiConfig` Python object,
+With magiconfig, these attributes can be provided by an imported [`MagiConfig`](#MagiConfig-1) Python object,
 in addition to the usual command-line arguments.
 
 ## Features
 
-* compatible with both Python 2 and Python 3
-* provides custom `ArgumentParser` class, which is a drop-in replacement for `argparse.ArgumentParser`
-* provides `MagiConfig` object that extends `argparse.Namespace` to add useful methods:
-  * `write()`: produce a Python config file that reproduces the current state of the namespace
-  * `join()`: merge with another config object
-  * used both as the input object in config files and as the output object of the parser
-* options related to the Python config file and object are contained in the class `MagiConfigOptions`:
-  * `args`: the command-line arguments to indicate the config file (default: "-C", "--config")
-  * `help`: custom help message for config args (optional)
-  * `required`: if the config arg is required when parsing (default: False)
-  * `default`: default value for the config file name (default: None)
-  * `dest`: destination for config arg (default: "config")
-  * `obj`: name of the `MagiConfig` object to be imported from the config file (default: "config")
-  * `obj_args`: command-line arguments to indicate the name of the object to be imported (optional)
-  * `obj_help`: custom help message for obj args (optional)
-  * `obj_dest`: destination for obj arg (default: "obj")
-  * `strict`: reject imported config object if it has unknown attributes (default: False)
-    * additional dests, unrelated to the command-line arguments, can be specified using `ArgumentParser.add_config_only(*args,**kwargs)`
-    * to specify additional dests without providing default values, provide strings for `*args` in the above method
-    * to specify required dests without default values, use `**kwargs` in the above method with values set to `None`
-    * config-only dests are included in the help message by default; to disable, use `config_only_help = False` in the `ArgumentParser` constructor
-  * `strict_args`: optional command-line arguments to toggle strictness
-    * if `strict` above is set to False, providing an arg will toggle it to True; if set to True, will toggle it to False
-  * `strict_help`: custom help message for strict args (optional)
-  * `strict_dest`: destination for strict arg (default: "strict")
-  * these options can be modified using the `set_config_options()` method of the parser
-  * these options can be positional (rather than the optional versions shown here)
-* precedence of parameter values: command line > config file > defaults
-* values provided in a config file satisfy the "required" attribute of any such arguments specified in the parser
-* types specified for dests in argparse arguments are enforced for attributes imported from a config file
-  * exception: if multiple types are specified for a single dest, types are ignored in imported attributes
-* dests can be obtained from nested configs by using dots in the dest names
+magiconfig is compatible with both Python 2 and Python 3.
+It provides a custom [`ArgumentParser`](#ArgumentParser) class, which is a drop-in replacement for `argparse.ArgumentParser`.
+It also provides [`MagiConfig`](#MagiConfig-1) and [`MagiConfigOptions`](#MagiConfigOptions) classes.
+
+### ArgumentParser
+
+The API of this class is extended with several additional functions to manage config settings, as well as to provide other useful operations.
+
+#### Constructor
+
+The constructor supports several additional options:
+* `config_options`: takes an instance of [`MagiConfigOptions`](#MagiConfigOptions); default = `None` (falls back to standard argparse behavior)
+* `config_only_help`: include config-only args in the help message (see [`add_config_only()`](#add_config_onlyargs-kwargs)); default = `True`
+
+#### `parse_args(), parse_known_args()`
+
+These function interfaces are unchanged from argparse, but they return a [`MagiConfig`](#MagiConfig-1) object.
+
+#### `parse_config(config_name, config_obj, config_strict, namespace=None)`
+
+This is mainly an internal function used in `parse_known_args()`, but like that function, it could also be used standalone.
+
+* `config_name`: name of config file to import
+* `config_obj`: name of config object inside config file
+* `config_strict`: whether to reject imported config object if it has unknown attributes
+* `namespace`: `Namespace` object to append to, if any
+
+Raises `ValueError` if any required config-only arguments are missing or if `config_strict` is `True` and the imported config has unknown attributes.
+
+#### `set_config_options(**kwargs)`
+
+This function allows changing the config options after the parser is initialized.
+It accepts all parameters that can be used to construct an instance of [`MagiConfigOptions`](#MagiConfigOptions).
+Raises `ValueError` if any other parameters are provided.
+
+#### `write_config(namespace, filename)`
+
+* `namespace`: [`MagiConfig`](#MagiConfig-1) object to be written
+* `filename`: name of file to write
+
+This function uses the class member `config_options.obj` as the name of the [`MagiConfig`](#MagiConfig-1) object in the file.
+It can be used to preserve the state of the configuration after any command-line modifications (see [Example 1](#1-basic-setup)).
+
+#### `add_config_only(*args, **kwargs)`
+
+This interface allows adding dests that are only provided by the config, not by command-line arguments.
+
+* `args`: no default value, not required
+* `**kwargs`: default value OR required (value=`None`)
+
+#### `remove_config_only(arg)`
+
+* `arg`: name of config-only arg to remove
+
+Raises `KeyError` if arg is not found in the list of config-only args.
+
+#### `remove_argument(arg, keep=False)`
+
+This function allows removing a single argument (a missing feature in argparse).
+
+* `arg`: flag (for optional arguments) or dest (for positional arguments)
+* `keep`: for optional arguments, `True` will remove just the single specified flag `arg` (the entire action is removed only if it has no remaining flags); `False` (default) always removes the action associated with the flag
+* for positional arguments, all positional actions with the specified dest are removed (but not optional arguments with that dest)
+
+Exits with `error()` if an unknown argument is provided.
+
+### MagiConfigOptions
+
+This simple class stores options related to the use of configs in the [`ArgumentParser`](#ArgumentParser).
+
+#### Constructor
+
+* `args`: the command-line arguments to indicate the config file (default: "-C", "--config")
+* `help`: custom help message for config args (optional)
+* `required`: if the config arg is required when parsing (default: False)
+* `default`: default value for the config file name (default: None)
+* `dest`: destination for config arg (default: "config")
+* `obj`: name of the `MagiConfig` object to be imported from the config file (default: "config")
+* `obj_args`: command-line arguments to indicate the name of the object to be imported (optional)
+* `obj_help`: custom help message for obj args (optional)
+* `obj_dest`: destination for obj arg (default: "obj")
+* `strict`: reject imported config object if it has unknown attributes (default: False)
+* `strict_args`: optional command-line arguments to toggle strictness
+  * if `strict` above is set to False, providing an arg will toggle it to True; if set to True, will toggle it to False
+* `strict_help`: custom help message for strict args (optional)
+* `strict_dest`: destination for strict arg (default: "strict")
+
+The values for `args`, `obj_args`, and `strict_args` can be positional arguments (rather than the optional arguments shown here).
+
+### MagiConfig
+
+This class extends `argparse.Namespace` to add a few useful methods.
+It is used both as the input object in config files and as the output object of [`ArgumentParser`](#ArgumentParser).
+
+#### `write(filename, config_obj)`
+
+* `filename`: name of file to write
+* `config_obj`: name of [`MagiConfig`](#MagiConfig-1) object in file
+
+#### `join(other_config, prefer_other=False)`
+
+* `other_config`: other [`MagiConfig`](#MagiConfig-1) object to merge
+* `prefer_other`: prefer values from other config, if dest is present in both configs (default: prefer this config)
+
+#### `getattr()`, `setattr()`
+
+These class methods are extended to handle nested config objects automatically.
+Any nonexistent intermediate objects are initialized as [`MagiConfig`](#MagiConfig-1) instances. Example:
+```python
+from magiconfig import MagiConfig
+x = MagiConfig()
+setattr(x,"y.z","test")
+print(x)
+```
+returns: `MagiConfig(y=MagiConfig(z='test'))`
+
+This enables obtaining dests from nested configs by using dots in the dest names.
+
+### Other
+
+#### Subparser aliases
+
+`_SubParsersAction.add_parser` is modified to backport the use of subparsers aliases to Python 2.
+
+#### Convenience
+
+All public classes and constants from argparse are added to the magiconfig namespace for easier drop-in usage.
 
 ## Examples
 

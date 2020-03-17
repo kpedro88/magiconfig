@@ -12,7 +12,7 @@ Table of Contents
       * [parse_args(), parse_known_args()](#parse_args-parse_known_args)
       * [parse_config(config_name, config_obj, config_strict, namespace=None)](#parse_configconfig_name-config_obj-config_strict-namespacenone)
       * [set_config_options(**kwargs)](#set_config_optionskwargs)
-      * [write_config(namespace, filename)](#write_confignamespace-filename)
+      * [write_config(namespace, filename, obj=None)](#write_confignamespace-filename-objnone)
       * [add_config_only(*args, **kwargs)](#add_config_onlyargs-kwargs)
       * [remove_config_only(arg)](#remove_config_onlyarg)
       * [remove_argument(arg, keep=False)](#remove_argumentarg-keepfalse)
@@ -86,13 +86,13 @@ This function allows changing the config options after the parser is initialized
 It accepts all parameters that can be used to construct an instance of [`MagiConfigOptions`](#MagiConfigOptions).
 Raises `ValueError` if any other parameters are provided.
 
-#### `write_config(namespace, filename)`
+#### `write_config(namespace, filename, obj=None)`
 
 * `namespace`: [`MagiConfig`](#MagiConfig-1) object to be written
 * `filename`: name of file to write
+* `obj`: name of the [`MagiConfig`](#MagiConfig-1) object in the file (default: class member `config_options.obj` or `"config"` if no `config_options` specified)
 
-This function uses the class member `config_options.obj` as the name of the [`MagiConfig`](#MagiConfig-1) object in the file.
-It can be used to preserve the state of the configuration after any command-line modifications (see [Example 1](#1-basic-setup)).
+This function can be used to preserve the state of the configuration after any command-line modifications (see [Example 1](#1-basic-setup)).
 
 #### `add_config_only(*args, **kwargs)`
 

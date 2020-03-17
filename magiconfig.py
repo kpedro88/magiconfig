@@ -335,8 +335,11 @@ class ArgumentParser(argparse.ArgumentParser):
         self._init_config()
 
     # write namespace into file using config_obj
-    def write_config(self, namespace, filename):
-        namespace.write(filename,self.config_options.obj)
+    def write_config(self, namespace, filename, obj=None):
+        if obj is None:
+            if self.config_options is not None: obj = self.config_options.obj
+            else: obj = "config"
+        namespace.write(filename,obj)
 
     # add config-only arguments
     # args: no default value, not required

@@ -112,7 +112,8 @@ class ArgumentParser(argparse.ArgumentParser):
         self._dests_actions = collections.defaultdict(list)
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
-        self._config_defaults = {}
+        self._config_only = {}
+        self._config_only_required = set()
 
         # initialize config args from options
         self._init_config()
@@ -292,7 +293,7 @@ class ArgumentParser(argparse.ArgumentParser):
         flat_vars = flatten_vars(config)
         possible_required_actions = []
         for attr,val in six.iteritems(flat_vars):
-            if attr in self._dests_actions or attr in self._config_defaults:
+            if attr in self._dests_actions or attr in self._config_only:
                 tmp = val
                 # check type if uniquely provided
                 if len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1:
@@ -303,6 +304,11 @@ class ArgumentParser(argparse.ArgumentParser):
                 unknown_attrs.append(attr)
         # remove required attr from associated actions
         self._required = self._suppress_required(possible_required_actions)
+
+        # check missing required config-only args
+        config_only_missing = self._config_only_required - set([attr for attr in flat_vars])
+        if len(config_only_missing)>0:
+            raise ValueError("Imported config missing required attributes: "+','.join(sorted(list(config_only_missing))))
 
         # check strict
         if config_strict and len(unknown_attrs)>0:
@@ -324,14 +330,20 @@ class ArgumentParser(argparse.ArgumentParser):
     def write_config(self, namespace, filename):
         namespace.write(filename,self.config_options.obj)
 
-    # keep track of non-arg defaults
-    set_defaults_orig = argparse.ArgumentParser.set_defaults
+    # add config-only arguments
+    # args: no default value, not required
+    # kwargs: default value OR required (value=None)
+    def add_config_only(self, *args, **kwargs):
+        self._config_only.update(kwargs)
+        self._config_only.update({key:None for key in args})
 
-    def set_defaults(self, *args, **kwargs):
-        self.set_defaults_orig(**kwargs)
+        # find any args that have changed required status
+        self._config_only_required = (self._config_only_required | set([key for key in kwargs if kwargs[key] is None])) - set([key for key in kwargs if kwargs[key] is not None])
 
-        self._config_defaults.update({key:val for key,val in six.iteritems(kwargs) if key not in self._dests_actions})
-        self._config_defaults.update({key:None for key in args if key not in self._dests_actions})
+    # remove config-only argument
+    def remove_config_only(self, arg):
+        self._config_only.pop(arg)
+        if arg in self._config_only_required: self._config_only_required.remove(arg)
 
     # keep map of dest:action(s)
     _add_action_orig = argparse.ArgumentParser._add_action

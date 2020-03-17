@@ -35,8 +35,9 @@ in addition to the usual command-line arguments.
   * `obj_help`: custom help message for obj args (optional)
   * `obj_dest`: destination for obj arg (default: "obj")
   * `strict`: reject imported config object if it has unknown attributes (default: False)
-    * additional dests, unrelated to the command-line arguments, can be specified using `ArgumentParser.set_defaults(*args,**kwargs)`
+    * additional dests, unrelated to the command-line arguments, can be specified using `ArgumentParser.add_config_only(*args,**kwargs)`
     * to specify additional dests without providing default values, provide strings for `*args` in the above method
+    * to specify required dests without default values, use `**kwargs` in the above method with values set to `None`
   * `strict_args`: optional command-line arguments to toggle strictness
     * if `strict` above is set to False, providing an arg will toggle it to True; if set to True, will toggle it to False
   * `strict_help`: custom help message for strict args (optional)

@@ -17,6 +17,6 @@ if __name__=="__main__":
     )
     parser.add_argument("-v","--verbose", dest="verbose", action="store_true", help="enable verbose output")
     # include schema in parser
-    parser.set_defaults(*config_schema_flat)
+    parser.add_config_only(*config_schema_flat)
     args = parser.parse_args()
     if args.verbose: six.print_(args)

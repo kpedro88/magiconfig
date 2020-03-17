@@ -181,7 +181,7 @@ def test_extra_dests():
     parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
         strict = True
     )))
-    parser.set_defaults(
+    parser.add_config_only(
         "extra",
     )
     args = parser.parse_args(args=["-C","tests/test_config3.py"])
@@ -340,6 +340,37 @@ def test_remove_unknown_arg():
     else:
         return False
 
+def test_config_only_required():
+    parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+        strict = True
+    )))
+    parser.add_config_only(
+        extra=None,
+    )
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config.py"])
+    except:
+        return True
+    else:
+        return False
+
+def test_config_only_remove():
+    parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+        strict = True
+    )))
+    parser.add_config_only(
+        "extra"
+    )
+    parser.remove_config_only(
+        "extra"
+    )
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config3.py"])
+    except:
+        return True
+    else:
+        return False
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -369,7 +400,8 @@ if __name__=="__main__":
         ("test_config_usage_twice",test_config_usage_twice),
         ("test_remove_arg",test_remove_arg),
         ("test_remove_action",test_remove_action),
-        ("test_remove_unknown_arg",test_remove_unknown_arg),
+        ("test_config_only_required",test_config_only_required),
+        ("test_config_only_remove",test_config_only_remove),
     ])
     successful = []
     failed = []

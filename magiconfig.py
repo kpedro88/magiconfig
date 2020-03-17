@@ -83,7 +83,7 @@ class MagiConfigOptions(object):
         self.strict_help = strict_help
         self.strict_dest = strict_dest
 
-# patch base class to remove recursively through all groups
+# patch base class to remove recursively through all groups (defined as standalone to be used on other objects)
 # this is needed to get correct help messages if set_config_options is called to make changes after initialization
 def _remove_action_all(self, action, throw=True):
     try:
@@ -96,12 +96,9 @@ def _remove_action_all(self, action, throw=True):
         else: pass
     # check all groups -> never throw
     for group in self._action_groups + self._mutually_exclusive_groups:
-        try:
+        if action in group._group_actions:
             group._group_actions.remove(action)
-            group._remove_action(action,throw=False)
-        except:
-            continue
-argparse._ActionsContainer._remove_action = _remove_action_all
+        _remove_action_all(group,action,throw=False)
 
 class ArgumentParser(argparse.ArgumentParser):
     # additional argument:
@@ -353,6 +350,8 @@ class ArgumentParser(argparse.ArgumentParser):
         action = self._add_action_orig(action)
         self._dests_actions[action.dest].append(action)
         return action
+
+    _remove_action = _remove_action_all
 
     # allow removing single argument
     # for optional arguments: if keep is true, just removes the single specified arg; otherwise, removes entire action

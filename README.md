@@ -67,6 +67,7 @@ The constructor supports several additional options:
 #### `parse_args(), parse_known_args()`
 
 These function interfaces are unchanged from argparse, but they return a [`MagiConfig`](#MagiConfig-1) object.
+If an input `namespace` argument is provided but is not of type [`MagiConfig`](#MagiConfig-1), a conversion will be attempted.
 
 #### `parse_config(config_name, config_obj, config_strict, namespace=None)`
 

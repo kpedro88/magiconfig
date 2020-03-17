@@ -214,11 +214,18 @@ class ArgumentParser(argparse.ArgumentParser):
         for action in actions:
             action.required = True
 
+    # make sure it exists and is a MagiConfig
+    def _check_namespace(self, namespace):
+        if namespace is None: return MagiConfig()
+        elif isinstance(namespace,MagiConfig): return namespace
+        elif len(vars(namespace))==0: return MagiConfig()
+        else: return MagiConfig(vars(namespace))
+
     def parse_known_args(self, args=None, namespace=None):
         if args is None: args = sys.argv[1:]
         else: args = list(args)
-    
-        if namespace is None: namespace = MagiConfig()
+
+        namespace = self._check_namespace(namespace)
 
         # fall back to default argparse behavior
         if self._config_actions is None:
@@ -269,6 +276,9 @@ class ArgumentParser(argparse.ArgumentParser):
         return tmpspace, remaining_args
 
     def parse_config(self, config_name, config_obj, config_strict, namespace=None):
+        # in case used standalone
+        namespace = self._check_namespace(namespace)
+
         # import config as module
         # (from configurati)
         module_id = str(uuid.uuid4())

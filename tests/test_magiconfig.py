@@ -193,7 +193,7 @@ def test_extra_dests():
     )
     return args==expected
 
-def test_dot_dests():
+def test_dot_dests(namespace=None):
     parser = magiconfig.ArgumentParser(
         config_options = magiconfig.MagiConfigOptions(
             strict = True
@@ -201,11 +201,14 @@ def test_dot_dests():
     )
     parser.add_argument("-f","--foo", dest="one.foo", type=str, default="lorem", help="foo arg")
     parser.add_argument("-b","--bar", dest="two.bar", type=float, required=True, help="bar arg")
-    args = parser.parse_args(args=["-C","tests/test_config_sub.py"])
+    args = parser.parse_args(args=["-C","tests/test_config_sub.py"],namespace=namespace)
     expected = magiconfig.MagiConfig()
     expected.one = magiconfig.MagiConfig(foo = '2')
     expected.two = magiconfig.MagiConfig(bar = 2.0)
     return args==expected
+
+def test_namespace_convert():
+    return test_dot_dests(namespace=argparse.Namespace())
 
 def test_obj_arg():
     parser = make_parser(magiconfig.ArgumentParser(config_options = magiconfig.MagiConfigOptions(
@@ -404,6 +407,7 @@ if __name__=="__main__":
         ("test_config_join",test_config_join),
         ("test_extra_dests",test_extra_dests),
         ("test_dot_dests",test_dot_dests),
+        ("test_namespace_convert",test_namespace_convert),
         ("test_obj_arg",test_obj_arg),
         ("test_obj_arg_nodefault",test_obj_arg_nodefault),
         ("test_change_config_arg",test_change_config_arg),

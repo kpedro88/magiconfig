@@ -473,3 +473,12 @@ OPTIONAL = argparse.OPTIONAL
 REMAINDER = argparse.REMAINDER
 SUPPRESS = argparse.SUPPRESS
 ZERO_OR_MORE = argparse.ZERO_OR_MORE
+
+# convenience definition
+# (from ConfigArgParse)
+class ArgumentDefaultsRawHelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter,
+    argparse.RawTextHelpFormatter,
+    argparse.RawDescriptionHelpFormatter):
+    """HelpFormatter that adds default values AND doesn't do line-wrapping"""
+pass

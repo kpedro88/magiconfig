@@ -179,6 +179,8 @@ This enables obtaining dests from nested configs by using dots in the dest names
 
 All public classes and constants from argparse are added to the magiconfig namespace for easier drop-in usage.
 
+A class `ArgumentDefaultsRawHelpFormatter` is defined to present help messages with default values and without line wrapping (from [ConfigArgParse](https://github.com/bw2/ConfigArgParse)).
+
 ## Examples
 
 ### 1) Basic setup

@@ -229,11 +229,11 @@ class ArgumentParser(argparse.ArgumentParser):
         if args is None: args = sys.argv[1:]
         else: args = list(args)
 
-        namespace = self._check_namespace(namespace)
-
         # fall back to default argparse behavior
         if self._config_actions is None:
             return self.parse_known_args_orig(args=args,namespace=namespace)
+        else:
+            namespace = self._check_namespace(namespace)
 
         # create a subordinate instance with just the config options
         config_only_parser = ArgumentParser(

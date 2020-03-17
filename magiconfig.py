@@ -153,14 +153,14 @@ class ArgumentParser(argparse.ArgumentParser):
                 help=self.config_options.help if self.config_options.help is not None else "name of config file to import (w/ object"+(": "+self.config_options.obj if self.config_options.obj_args is None else " from "+",".join(self.config_options.obj_args))+")",
             )
             if self.config_options.default is not None and len(self.config_options.default)>0:
-                _config_kwargs.update(dict(
+                _config_kwargs.update(
                     default=self.config_options.default,
-                ))
+                )
             if not _config_pos:
-                _config_kwargs.update(dict(
+                _config_kwargs.update(
                     dest=self._dest,
                     required=self.config_options.required,
-                ))
+                )
             self._config_actions.append(self.add_argument(
                 *self.config_options.args,
                 **_config_kwargs
@@ -173,14 +173,14 @@ class ArgumentParser(argparse.ArgumentParser):
                 )
                 _obj_required = self.config_options.obj is None or len(self.config_options.obj)==0
                 if not _obj_required:
-                    _obj_kwargs.update(dict(
+                    _obj_kwargs.update(
                         default=self.config_options.obj,
-                    ))
+                    )
                 if not _obj_pos:
-                    _obj_kwargs.update(dict(
+                    _obj_kwargs.update(
                         dest=self._obj_dest,
                         required=_obj_required,
-                    ))
+                    )
                 self._config_actions.append(self.add_argument(
                     *self.config_options.obj_args,
                     **_obj_kwargs
@@ -194,9 +194,9 @@ class ArgumentParser(argparse.ArgumentParser):
                     default=self.config_options.strict,
                 )
                 if not _strict_pos:
-                    _strict_kwargs.update(dict(
+                    _strict_kwargs.update(
                         dest = self._strict_dest
-                    ))
+                    )
                 self._config_actions.append(self.add_argument(
                     *self.config_options.strict_args,
                     **_strict_kwargs

@@ -198,7 +198,7 @@ demonstrates the different ways to set values, as well as some of the features o
 
 The help printout for the arguments defined in the script:
 ```
-usage: example1.py [-C CONFIG] [-h] [-f FOO] -b BAR [-i]
+usage: example1.py [-h] [-C CONFIG] [-f FOO] -b BAR [-i]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -269,6 +269,27 @@ The config file [examples/config3.py](./examples/config3.py) can be used with th
 MagiConfig(dataset=MagiConfig(background='background', path='/data', signal='signal'), hyper=MagiConfig(learning_rate=0.1, loss='log'), training=MagiConfig(size=0.5, weights=[1, 1]), verbose=True)
 ```
 
+This example also shows how config-only arguments can be given default values or marked as required. These attributes are reflected in the help message:
+```
+> python examples/example3.py --help
+usage: example3.py [-h] [-C CONFIG] [-v]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -C CONFIG, --config CONFIG
+                        name of config file to import (w/ object: config) (default: None)
+  -v, --verbose         enable verbose output (default: False)
+
+config-only arguments:
+  dataset.background    (required)
+  dataset.path            (default: /data)
+  dataset.signal        (required)
+  hyper.learning_rate
+  hyper.loss
+  training.size
+  training.weights
+```
+
 ### 4) Scaling up
 
 When scaling up an application to handle a large number of possible inputs,
@@ -282,7 +303,7 @@ other config objects in the config file are just ignored.
 
 The help message for this script is:
 ```
-usage: example4.py [-C CONFIG] [-O OBJ] [-h] [-f FOO] -b BAR -i INPUT
+usage: example4.py [-h] [-C CONFIG] [-O OBJ] [-f FOO] -b BAR -i INPUT
 
 optional arguments:
   -h, --help            show this help message and exit

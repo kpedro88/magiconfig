@@ -127,20 +127,20 @@ This simple class stores options related to the use of configs in the [`Argument
 
 #### Constructor
 
-* `args`: the command-line arguments to indicate the config file (default: "-C", "--config")
+* `args`: the command-line arguments to indicate the config file (default: `["-C", "--config"]`)
 * `help`: custom help message for config args (optional)
-* `required`: if the config arg is required when parsing (default: False)
-* `default`: default value for the config file name (default: None)
-* `dest`: destination for config arg (default: "config")
-* `obj`: name of the `MagiConfig` object to be imported from the config file (default: "config")
+* `required`: if the config arg is required when parsing (default: `False`)
+* `default`: default value for the config file name (default: `None`)
+* `dest`: destination for config arg (default: `"config"`)
+* `obj`: name of the `MagiConfig` object to be imported from the config file (default: `"config"`)
 * `obj_args`: command-line arguments to indicate the name of the object to be imported (optional)
 * `obj_help`: custom help message for obj args (optional)
-* `obj_dest`: destination for obj arg (default: "obj")
-* `strict`: reject imported config object if it has unknown attributes (default: False)
+* `obj_dest`: destination for obj arg (default: `"obj"`)
+* `strict`: reject imported config object if it has unknown attributes (default: `False`)
 * `strict_args`: optional command-line arguments to toggle strictness
-  * if `strict` above is set to False, providing an arg will toggle it to True; if set to True, will toggle it to False
+  * if `strict` above is set to `False`, providing an arg will toggle it to `True`; if set to `True`, will toggle it to `False`
 * `strict_help`: custom help message for strict args (optional)
-* `strict_dest`: destination for strict arg (default: "strict")
+* `strict_dest`: destination for strict arg (default: `"strict"`)
 
 The values for `args`, `obj_args`, and `strict_args` can be positional arguments (rather than the optional arguments shown here).
 

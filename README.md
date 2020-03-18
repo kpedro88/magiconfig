@@ -308,13 +308,12 @@ usage: example4.py [-h] [-C CONFIG] [-O OBJ] [-f FOO] -b BAR -i INPUT
 optional arguments:
   -h, --help            show this help message and exit
   -C CONFIG, --config CONFIG
-                        name of config file to import (w/ object from -O,--
-                        obj)
-  -O OBJ, --obj OBJ     name of object to import from config file
-  -f FOO, --foo FOO     foo arg
-  -b BAR, --bar BAR     bar arg
+                        name of config file to import (w/ object from -O,--obj) (default: None)
+  -O OBJ, --obj OBJ     name of object to import from config file (default: config)
+  -f FOO, --foo FOO     foo arg (default: lorem)
+  -b BAR, --bar BAR     bar arg (default: None)
   -i INPUT, --input INPUT
-                        input arg
+                        input arg (default: None)
 ```
 
 The script can be run with different inputs all contained in [examples/config4.py](./examples/config4.py):

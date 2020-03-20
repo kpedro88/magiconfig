@@ -410,6 +410,15 @@ def test_dest_already_config_only():
     else:
         return False
 
+def test_set_config_from_none():
+    parser = make_parser(magiconfig.ArgumentParser())
+    try:
+        parser.set_config_options(args = ["-c"])
+    except:
+        return False
+    else:
+        return True
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -445,6 +454,7 @@ if __name__=="__main__":
         ("test_config_only_help",test_config_only_help),
         ("test_config_only_already_used",test_config_only_already_used),
         ("test_dest_already_config_only",test_dest_already_config_only),
+        ("test_set_config_from_none",test_set_config_from_none),
     ])
     successful = []
     failed = []

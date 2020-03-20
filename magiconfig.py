@@ -331,6 +331,7 @@ class ArgumentParser(argparse.ArgumentParser):
     # allow modifying options for config args
     def set_config_options(self, **kwargs):
         # modify config options
+        if self.config_options is None: self.config_options = MagiConfigOptions()
         for key,val in six.iteritems(kwargs):
             if hasattr(self.config_options,key): setattr(self.config_options,key,val)
             else: raise MagiConfigError("Attempt to set invalid config option: "+key)

@@ -419,6 +419,18 @@ def test_set_config_from_none():
     else:
         return True
 
+def test_copy_config_options():
+    parser = make_parser()
+    options2 = magiconfig.MagiConfigOptions(args = ["-c"])
+    parser.copy_config_options(options2)
+    args = parser.parse_args(args=["-c","tests/test_config.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+    )
+    return args==expected
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -455,6 +467,7 @@ if __name__=="__main__":
         ("test_config_only_already_used",test_config_only_already_used),
         ("test_dest_already_config_only",test_dest_already_config_only),
         ("test_set_config_from_none",test_set_config_from_none),
+        ("test_copy_config_options",test_copy_config_options),
     ])
     successful = []
     failed = []

@@ -339,6 +339,10 @@ class ArgumentParser(argparse.ArgumentParser):
         # reinitialize
         self._init_config()
 
+    # also allow copying existing set of options
+    def copy_config_options(self, config_options):
+        self.set_config_options(**vars(config_options))
+
     # write namespace into file using config_obj
     def write_config(self, namespace, filename, obj=None):
         if obj is None:

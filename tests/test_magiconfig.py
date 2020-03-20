@@ -431,6 +431,29 @@ def test_copy_config_options():
     )
     return args==expected
 
+def test_remove_action_then_config_only():
+    parser = make_parser()
+    parser.remove_argument('-b')
+    try:
+        parser.add_config_only("bar")
+    except:
+        return False
+    else:
+        return True
+
+def test_default_config_only():
+    parser = make_parser()
+    parser.remove_argument("-i")
+    parser.add_config_only("ipsum")
+    parser.set_defaults(ipsum = True)
+    args = parser.parse_args(args=["-C","tests/test_config.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+    )
+    return args==expected
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -468,6 +491,8 @@ if __name__=="__main__":
         ("test_dest_already_config_only",test_dest_already_config_only),
         ("test_set_config_from_none",test_set_config_from_none),
         ("test_copy_config_options",test_copy_config_options),
+        ("test_remove_action_then_config_only",test_remove_action_then_config_only),
+        ("test_default_config_only",test_default_config_only),
     ])
     successful = []
     failed = []

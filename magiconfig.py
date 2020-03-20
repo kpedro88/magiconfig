@@ -94,7 +94,10 @@ def _remove_action_all(self, action, throw=True):
         self._actions.remove(action)
         for option_string in action.option_strings:
             self._option_string_actions.pop(option_string)
-        if hasattr(self,"_dests_actions"): self._dests_actions[action.dest].remove(action)
+        if hasattr(self,"_dests_actions"):
+            self._dests_actions[action.dest].remove(action)
+            if len(self._dests_actions[action.dest])==0:
+                self._dests_actions.pop(action.dest)
     except:
         if throw: raise
         else: pass

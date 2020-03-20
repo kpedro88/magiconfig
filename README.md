@@ -55,6 +55,7 @@ in addition to the usual command-line arguments.
 magiconfig is compatible with both Python 2 and Python 3.
 It provides a custom [`ArgumentParser`](#ArgumentParser) class, which is a drop-in replacement for `argparse.ArgumentParser`.
 It also provides [`MagiConfig`](#MagiConfig-1), [`MagiConfigOptions`](#MagiConfigOptions), and [`MagiConfigError`](#MagiConfigError) classes.
+The precedence of parameter values is: command line > config file > defaults.
 
 ### ArgumentParser
 

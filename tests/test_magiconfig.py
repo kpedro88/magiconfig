@@ -466,6 +466,16 @@ def test_nargs_config():
     )
     return args==expected
 
+def test_choices_config():
+    parser = make_parser()
+    parser.add_argument("-n", "--names", dest="names", type=str, default=[], nargs='+', choices=["Alice","Carol"], help = "names arg")
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config4.py"])
+    except:
+        return True
+    else:
+        return False
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -506,6 +516,7 @@ if __name__=="__main__":
         ("test_remove_action_then_config_only",test_remove_action_then_config_only),
         ("test_default_config_only",test_default_config_only),
         ("test_nargs_config",test_nargs_config),
+        ("test_choices_config",test_choices_config),
     ])
     successful = []
     failed = []

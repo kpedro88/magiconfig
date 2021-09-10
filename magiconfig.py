@@ -325,6 +325,8 @@ class ArgumentParser(argparse.ArgumentParser):
                         # _get_values() expects a list
                         if not isinstance(tmp,list): tmp = [tmp]
                         tmp = self._get_values(tmp_action,tmp)
+                    # enforce choices if any
+                    self._check_value(tmp_action, tmp)
                 setattr(namespace,attr,tmp)
                 possible_required_actions.extend(self._dests_actions[attr])
             else:

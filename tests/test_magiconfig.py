@@ -454,6 +454,18 @@ def test_default_config_only():
     )
     return args==expected
 
+def test_nargs_config():
+    parser = make_parser()
+    parser.add_argument("-n", "--names", dest="names", type=str, default=[], nargs='+', help = "names arg")
+    args = parser.parse_args(args=["-C","tests/test_config4.py"])
+    expected = magiconfig.MagiConfig(
+        bar = 2.0,
+        foo = '2',
+        ipsum = False,
+        names = ["Alice", "Bob"],
+    )
+    return args==expected
+
 if __name__=="__main__":
     tests = OrderedDict([
         ("test_dropin",test_dropin),
@@ -493,6 +505,7 @@ if __name__=="__main__":
         ("test_copy_config_options",test_copy_config_options),
         ("test_remove_action_then_config_only",test_remove_action_then_config_only),
         ("test_default_config_only",test_default_config_only),
+        ("test_nargs_config",test_nargs_config),
     ])
     successful = []
     failed = []

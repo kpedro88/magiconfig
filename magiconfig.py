@@ -312,7 +312,8 @@ class ArgumentParser(argparse.ArgumentParser):
                 tmp = val
                 # check type if uniquely provided
                 if len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1:
-                    tmp = self._get_value(self._dests_actions[attr][0],tmp)
+                    # use _get_values() rather than _get_value() to handle nargs cases
+                    tmp = self._get_values(self._dests_actions[attr][0],tmp)
                 setattr(namespace,attr,tmp)
                 possible_required_actions.extend(self._dests_actions[attr])
             else:

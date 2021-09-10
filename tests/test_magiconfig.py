@@ -431,6 +431,16 @@ def test_copy_config_options():
     )
     return args==expected
 
+def test_remove_config_options():
+    parser = make_parser()
+    parser.remove_config_options()
+    try:
+        args = parser.parse_args(args=["-C","tests/test_config.py"])
+    except:
+        return True
+    else:
+        return False
+
 def test_remove_action_then_config_only():
     parser = make_parser()
     parser.remove_argument('-b')
@@ -477,6 +487,7 @@ def test_choices_config():
         return False
 
 if __name__=="__main__":
+    test_remove_config_options()
     tests = OrderedDict([
         ("test_dropin",test_dropin),
         ("test_config_args",test_config_args),
@@ -513,6 +524,7 @@ if __name__=="__main__":
         ("test_dest_already_config_only",test_dest_already_config_only),
         ("test_set_config_from_none",test_set_config_from_none),
         ("test_copy_config_options",test_copy_config_options),
+        ("test_remove_config_options",test_remove_config_options),
         ("test_remove_action_then_config_only",test_remove_action_then_config_only),
         ("test_default_config_only",test_default_config_only),
         ("test_nargs_config",test_nargs_config),

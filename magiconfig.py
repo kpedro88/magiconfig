@@ -360,6 +360,11 @@ class ArgumentParser(argparse.ArgumentParser):
     def copy_config_options(self, config_options):
         self.set_config_options(**vars(config_options))
 
+    # allow removing config options
+    def remove_config_options(self):
+        self.config_options = None
+        self._init_config()
+
     # write namespace into file using config_obj
     def write_config(self, namespace, filename, obj=None):
         if obj is None:

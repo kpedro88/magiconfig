@@ -13,6 +13,7 @@ Table of Contents
       * [parse_config(config_name, config_obj, config_strict, namespace=None)](#parse_configconfig_name-config_obj-config_strict-namespacenone)
       * [set_config_options(**kwargs)](#set_config_optionskwargs)
       * [copy_config_options(config_options)](#copy_config_optionsconfig_options)
+      * [remove_config_options()](#remove_config_options)
       * [write_config(namespace, filename, obj=None)](#write_confignamespace-filename-objnone)
       * [add_config_only(*args, **kwargs)](#add_config_onlyargs-kwargs)
       * [remove_config_only(arg)](#remove_config_onlyarg)
@@ -93,6 +94,10 @@ Raises [`MagiConfigError`](#MagiConfigError) if any other parameters are provide
 
 This function allows copying another [`MagiConfigOptions`](#MagiConfigOptions) object to be used in this parser.
 Raises [`MagiConfigError`](#MagiConfigError) if an object with any unknown parameters is provided.
+
+#### `remove_config_options()`
+
+This function allows removing all config options from the parser.
 
 #### `write_config(namespace, filename, obj=None)`
 

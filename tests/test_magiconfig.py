@@ -486,6 +486,22 @@ def test_choices_config():
     else:
         return False
 
+def test_config_write_read():
+    parser1 = make_parser()
+    args1 = parser1.parse_args(args=["-b","2"])
+    print(args1)
+    parser1.write_config(args1, "config_tmp.py")
+    parser2 = make_parser()
+    args2 = parser2.parse_args(args=["-C","config_tmp.py"])
+    print(args2)
+    return args1==args2
+
+def test_config_default_type():
+    parser = make_parser()
+    parser.add_argument("--extra", dest="extra", type=str, default=None, help = "extra arg")
+    args = parser.parse_args(args=["-C","tests/test_config5.py"])
+    return args.extra==None
+
 if __name__=="__main__":
     test_remove_config_options()
     tests = OrderedDict([
@@ -529,6 +545,8 @@ if __name__=="__main__":
         ("test_default_config_only",test_default_config_only),
         ("test_nargs_config",test_nargs_config),
         ("test_choices_config",test_choices_config),
+        ("test_config_write_read",test_config_write_read),
+        ("test_config_default_type",test_config_default_type),
     ])
     successful = []
     failed = []

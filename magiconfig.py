@@ -314,9 +314,12 @@ class ArgumentParser(argparse.ArgumentParser):
                 if len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1:
                     # use _get_values() rather than _get_value() to handle nargs cases
                     tmp_action = self._dests_actions[attr][0]
+                    # argparse does not apply type checks to default args
+                    if tmp==tmp_action.default:
+                        pass
                     # nargs=0 is usually _StoreTrueAction or _StoreFalseAction:
                     # _get_values() expects an empty list for those, but we want to check the type of the provided value
-                    if isinstance(tmp_action,argparse._StoreTrueAction) or isinstance(tmp_action,argparse._StoreFalseAction):
+                    elif isinstance(tmp_action,argparse._StoreTrueAction) or isinstance(tmp_action,argparse._StoreFalseAction):
                         tmp = bool(tmp)
                     # generically handle any other cases with nargs=0
                     elif tmp_action.nargs==0:

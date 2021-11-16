@@ -521,15 +521,27 @@ class test_nargs_config(MagiConfigTest):
         return args==expected
 
 class test_choices_config(MagiConfigTest):
-    def test(self):
+    def test(self,config="tests/test_config4.py",should_fail=True,nargs='+',choices=["Alice","Carol"]):
         parser = make_parser()
-        parser.add_argument("-n", "--names", dest="names", type=str, default=[], nargs='+', choices=["Alice","Carol"], help = "names arg")
+        parser.add_argument("-n", "--names", dest="names", type=str, default=[], nargs=nargs, choices=choices, help = "names arg")
         try:
-            args = parser.parse_args(args=["-C","tests/test_config4.py"])
+            args = parser.parse_args(args=["-C",config])
         except:
-            return True
+            return should_fail
         else:
-            return False
+            return not should_fail
+
+class test_choices_config_single_default(MagiConfigTest):
+    def test(self):
+        return test_choices_config().test(config="tests/test_config4b.py",should_fail=False)
+
+class test_choices_config_single_arg_good(MagiConfigTest):
+    def test(self):
+        return test_choices_config().test(config="tests/test_config4b.py",nargs=None,should_fail=False)
+
+class test_choices_config_single_arg_bad(MagiConfigTest):
+    def test(self):
+        return test_choices_config().test(config="tests/test_config4b.py",nargs=None,choices=["Bob","Carol"])
 
 class test_config_write_read(MagiConfigTest):
     def test(self):

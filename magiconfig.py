@@ -312,9 +312,9 @@ class ArgumentParser(argparse.ArgumentParser):
                 tmp = val
                 # check type if uniquely provided
                 if len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1:
-                    # use _get_values() rather than _get_value() to handle nargs cases
+                    # use _get_values() rather than _get_value() to handle nargs cases; also enforces choices if any
                     tmp_action = self._dests_actions[attr][0]
-                    # argparse does not apply type checks to default args
+                    # argparse does not apply type or choice checks to default args
                     if tmp==tmp_action.default:
                         pass
                     # nargs=0 is usually _StoreTrueAction or _StoreFalseAction:
@@ -328,8 +328,6 @@ class ArgumentParser(argparse.ArgumentParser):
                         # _get_values() expects a list
                         if not isinstance(tmp,list): tmp = [tmp]
                         tmp = self._get_values(tmp_action,tmp)
-                    # enforce choices if any
-                    self._check_value(tmp_action, tmp)
                 setattr(namespace,attr,tmp)
                 possible_required_actions.extend(self._dests_actions[attr])
             else:

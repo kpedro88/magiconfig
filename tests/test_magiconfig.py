@@ -552,6 +552,20 @@ class test_config_write_read(MagiConfigTest):
         args2 = parser2.parse_args(args=["-C","config_tmp.py"])
         return args1==args2
 
+class test_config_write_read_OrderedDict(MagiConfigTest):
+    def test(self):
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions())
+        parser.add_argument("-d","--dict", type=OrderedDict, default=OrderedDict(), help="dict arg")
+        config_in = magiconfig.MagiConfig(
+            dict = OrderedDict([(1,2)]),
+        )
+        parser.write_config(config_in, "config_tmp2.py")
+        try:
+            args = parser.parse_args(args=["-C","config_tmp2.py"])
+            return config_in==args
+        except:
+            return False
+
 class test_config_default_type(MagiConfigTest):
     def test(self):
         parser = make_parser()

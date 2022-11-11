@@ -21,13 +21,22 @@ class MagiConfig(argparse.Namespace):
             raise MagiConfigError("config_obj must be specified")
         # write namespace into file
         with open(filename,'w') as outfile:
-            lines = []
-            prepend = ""
+            imports = ["from magiconfig import MagiConfig"]
             # create a magiconfig
-            lines.extend(["from magiconfig import MagiConfig","",config_obj+" = MagiConfig()"])
+            lines = [config_obj+" = MagiConfig()"]
             prepend = config_obj + "."
-            lines.extend([prepend+str(attr)+" = "+repr(val) for attr,val in sorted(six.iteritems(vars(self)))])
-            outfile.write('\n'.join(lines))
+            for attr,val in sorted(six.iteritems(vars(self))):
+                valclass = val.__class__
+                # todo: handle any other cases...
+                if valclass.__module__=='__builtin__':
+                    if valclass.__name__=='module':
+                        imports.append("import {}".format(val.__name__))
+                    # no imports needed for other builtin types
+                else:
+                    imports.append("from {} import {}".format(valclass.__module__,valclass.__name__))
+                # todo: detect cases where repr() doesn't work as desired - requires eval()?
+                lines.append(prepend+str(attr)+" = "+repr(val))
+            outfile.write('\n'.join(imports+[""]+lines))
 
     # to merge with another config
     def join(self, other_config, prefer_other=False):

@@ -134,3 +134,5 @@ dmypy.json
 /examples/config1_out.py
 /config_tmp.py
 /tests/config_tmp.py
+/config_tmp2.py
+/tests/config_tmp2.py

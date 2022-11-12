@@ -27,12 +27,12 @@ class MagiConfig(argparse.Namespace):
             prepend = config_obj + "."
             for attr,val in sorted(six.iteritems(vars(self))):
                 valclass = val.__class__
+                # no imports needed for other builtin types or MagiConfig itself
                 # todo: handle any other cases...
                 if valclass.__module__=='__builtin__':
                     if valclass.__name__=='module':
                         imports.append("import {}".format(val.__name__))
-                    # no imports needed for other builtin types
-                else:
+                elif valclass!=self.__class__:
                     imports.append("from {} import {}".format(valclass.__module__,valclass.__name__))
                 # todo: detect cases where repr() doesn't work as desired - requires eval()?
                 lines.append(prepend+str(attr)+" = "+repr(val))

@@ -19,24 +19,36 @@ class MagiConfig(argparse.Namespace):
     def write(self, filename, config_obj):
         if len(config_obj)==0:
             raise MagiConfigError("config_obj must be specified")
+        # get lines to write
+        default_imports = ["from magiconfig import MagiConfig"]
+        imports, lines = self._write(config_obj)
         # write namespace into file
         with open(filename,'w') as outfile:
-            imports = ["from magiconfig import MagiConfig"]
-            # create a magiconfig
-            lines = [config_obj+" = MagiConfig()"]
-            prepend = config_obj + "."
-            for attr,val in sorted(six.iteritems(vars(self))):
-                valclass = val.__class__
+            outfile.write('\n'.join(default_imports+sorted(list(imports))+[""]+lines))
+
+    def _write(self, config_obj):
+        imports = set()
+        # create a magiconfig
+        lines = [config_obj+" = MagiConfig()"]
+        prepend = config_obj + "."
+        for attr,val in sorted(six.iteritems(vars(self))):
+            valclass = val.__class__
+            # recurse for nested configs
+            if valclass==self.__class__:
+                imports_tmp, lines_tmp = val._write(prepend+attr)
+                imports.update(imports_tmp)
+                lines.extend(lines_tmp)
+            else:
                 # no imports needed for other builtin types or MagiConfig itself
                 # todo: handle any other cases...
                 if valclass.__module__=='__builtin__':
                     if valclass.__name__=='module':
-                        imports.append("import {}".format(val.__name__))
-                elif valclass!=self.__class__:
-                    imports.append("from {} import {}".format(valclass.__module__,valclass.__name__))
+                        imports.add("import {}".format(val.__name__))
+                else:
+                    imports.add("from {} import {}".format(valclass.__module__,valclass.__name__))
                 # todo: detect cases where repr() doesn't work as desired - requires eval()?
                 lines.append(prepend+str(attr)+" = "+repr(val))
-            outfile.write('\n'.join(imports+[""]+lines))
+        return imports, lines
 
     # to merge with another config
     def join(self, other_config, prefer_other=False):

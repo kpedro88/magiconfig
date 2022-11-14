@@ -566,6 +566,22 @@ class test_config_write_read_OrderedDict(MagiConfigTest):
         except:
             return False
 
+class test_config_write_read_OrderedDict_nested(MagiConfigTest):
+    def test(self):
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions())
+        parser.add_argument("-d","--dict", dest="subconfig.dict", type=OrderedDict, default=OrderedDict(), help="dict arg")
+        config_in = magiconfig.MagiConfig(
+            subconfig = magiconfig.MagiConfig(
+                dict = OrderedDict([(1,2)]),
+            )
+        )
+        parser.write_config(config_in, "config_tmp3.py")
+        try:
+            args = parser.parse_args(args=["-C","config_tmp3.py"])
+            return config_in==args
+        except:
+            return False
+
 class test_config_default_type(MagiConfigTest):
     def test(self):
         parser = make_parser()
@@ -577,14 +593,16 @@ if __name__=="__main__":
     tests = OrderedDict([(subcl.__name__, subcl) for subcl in MagiConfigTest.__subclasses__()])
     successful = []
     failed = []
+    incomplete = []
     for test_name,test_class in six.iteritems(tests):
         try:
             result = test_class().test()
             if result: successful.append(test_name)
             else: failed.append(test_name)
         except:
-            failed.append(test_name)
+            incomplete.append(test_name)
     six.print_("Successful tests: "+', '.join(successful))
     six.print_("Failed tests: "+', '.join(failed))
-    if len(failed)>0:
+    six.print_("Incomplete tests: "+', '.join(incomplete))
+    if len(failed)>0 or len(incomplete)>0:
         sys.exit(1)

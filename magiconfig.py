@@ -2,8 +2,31 @@ import argparse
 import sys, os, imp, uuid
 import six
 import collections
+from six.moves.collections_abc import Sized, Iterable, Container, Mapping
 import functools
 import types
+
+# from https://github.com/python/cpython/blob/main/Lib/_collections_abc.py
+# missing from python < 3.6
+def _check_methods(C, *methods):
+    mro = C.__mro__
+    for method in methods:
+        for B in mro:
+            if method in B.__dict__:
+                if B.__dict__[method] is None:
+                    return NotImplemented
+                break
+        else:
+            return NotImplemented
+    return True
+
+class Collection(Sized, Iterable, Container):
+    __slots__ = ()
+    @classmethod
+    def __subclasshook__(cls, C):
+        if cls is Collection:
+            return _check_methods(C,  "__len__", "__iter__", "__contains__")
+        return NotImplemented
 
 # from https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-subobjects-chained-properties/31174427#31174427
 def _rgetattr(obj, attr, *args):
@@ -27,28 +50,54 @@ class MagiConfig(argparse.Namespace):
             outfile.write('\n'.join(default_imports+sorted(list(imports))+[""]+lines))
 
     def _write(self, config_obj):
+        checked = set()
         imports = set()
         # create a magiconfig
         lines = [config_obj+" = MagiConfig()"]
         prepend = config_obj + "."
         for attr,val in sorted(six.iteritems(vars(self))):
-            valclass = val.__class__
             # recurse for nested configs
-            if valclass==self.__class__:
+            if val.__class__==self.__class__:
                 imports_tmp, lines_tmp = val._write(prepend+attr)
                 imports.update(imports_tmp)
                 lines.extend(lines_tmp)
             else:
-                # no imports needed for other builtin types or MagiConfig itself
-                # todo: handle any other cases...
-                if valclass.__module__=='__builtin__':
-                    if valclass.__name__=='module':
-                        imports.add("import {}".format(val.__name__))
-                else:
-                    imports.add("from {} import {}".format(valclass.__module__,valclass.__name__))
+                imports.update(self._get_imports(val,checked))
                 # todo: detect cases where repr() doesn't work as desired - requires eval()?
                 lines.append(prepend+str(attr)+" = "+repr(val))
         return imports, lines
+
+    # recursively check imports (avoiding infinite recursion in self-referential case)
+    def _get_imports(self, val, checked=None):
+        valclass = val.__class__
+        if checked is None: checked = set()
+        imports = set()
+        if id(val) not in checked:
+            if valclass.__module__=='__builtin__':
+                if valclass.__name__=='module':
+                    imports.add("import {}".format(val.__name__))
+            else:
+                imports.add("from {} import {}".format(valclass.__module__,valclass.__name__))
+
+            checked.add(id(val))
+
+            # check collection entries
+            coll = None
+            if isinstance(val, Mapping):
+                coll = six.iteritems(val)
+            elif isinstance(val, Collection):
+                coll = val
+            elif isinstance(val, Container):
+                try:
+                    coll = vars(val)
+                except:
+                    # todo: solution for this case?
+                    pass
+            if coll is not None:
+                for subval in coll:
+                    imports.update(self._get_imports(subval, checked))
+
+        return imports
 
     # to merge with another config
     def join(self, other_config, prefer_other=False):

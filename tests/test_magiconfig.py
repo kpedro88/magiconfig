@@ -582,6 +582,40 @@ class test_config_write_read_OrderedDict_nested(MagiConfigTest):
         except:
             return False
 
+class test_config_write_read_OrderedDict_coll(MagiConfigTest):
+    def test(self):
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions())
+        parser.add_argument("-d","--dicts", dest="subconfig.dicts", default=[], help="dict arg")
+        config_in = magiconfig.MagiConfig(
+            subconfig = magiconfig.MagiConfig(
+                dicts = [OrderedDict([(1,2)]),OrderedDict([(3,4)])],
+            )
+        )
+        parser.write_config(config_in, "config_tmp4.py")
+        try:
+            args = parser.parse_args(args=["-C","config_tmp4.py"])
+            return config_in==args
+        except:
+            return False
+
+# todo: make this test pass
+'''
+class test_config_write_read_selfref(MagiConfigTest):
+    def test(self):
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions())
+        parser.add_argument("-d","--dict", default={}, help="dict arg")
+        config_in = magiconfig.MagiConfig(
+            dict = {}
+        )
+        config_in.dict[1] = config_in.dict
+        parser.write_config(config_in, "config_tmp5.py")
+        try:
+            args = parser.parse_args(args=["-C","config_tmp5.py"])
+            return config_in==args
+        except:
+            return False
+'''
+
 class test_config_default_type(MagiConfigTest):
     def test(self):
         parser = make_parser()

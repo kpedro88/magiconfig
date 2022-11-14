@@ -50,7 +50,6 @@ class MagiConfig(argparse.Namespace):
             outfile.write('\n'.join(default_imports+sorted(list(imports))+[""]+lines))
 
     def _write(self, config_obj):
-        checked = set()
         imports = set()
         # create a magiconfig
         lines = [config_obj+" = MagiConfig()"]
@@ -62,7 +61,7 @@ class MagiConfig(argparse.Namespace):
                 imports.update(imports_tmp)
                 lines.extend(lines_tmp)
             else:
-                imports.update(self._get_imports(val,checked))
+                imports.update(self._get_imports(val))
                 # todo: detect cases where repr() doesn't work as desired - requires eval()?
                 lines.append(prepend+str(attr)+" = "+repr(val))
         return imports, lines

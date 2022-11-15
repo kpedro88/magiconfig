@@ -39,44 +39,66 @@ class MagiConfigError(Exception):
     pass
 
 class MagiConfig(argparse.Namespace):
-    def write(self, filename, config_obj):
+    def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None):
         if len(config_obj)==0:
             raise MagiConfigError("config_obj must be specified")
+
+        # defaults
+        if attr_imports is None: attr_imports = {}
+        if class_imports is None: class_imports = {}
+        if attr_reprs is None: attr_reprs = {}
+        if class_reprs is None: class_reprs = {}
+
         # get lines to write
         default_imports = ["from magiconfig import MagiConfig"]
-        imports, lines = self._write(config_obj)
+        imports, lines = self._write(config_obj, attr_imports, class_imports, attr_reprs, class_reprs)
+
         # write namespace into file
         with open(filename,'w') as outfile:
             outfile.write('\n'.join(default_imports+sorted(list(imports))+[""]+lines))
 
-    def _write(self, config_obj):
+    def _write(self, config_obj, attr_imports, class_imports, attr_reprs, class_reprs):
         imports = set()
         # create a magiconfig
         lines = [config_obj+" = MagiConfig()"]
         prepend = config_obj + "."
         for attr,val in sorted(six.iteritems(vars(self))):
+            valclass = val.__class__
             # recurse for nested configs
-            if val.__class__==self.__class__:
-                imports_tmp, lines_tmp = val._write(prepend+attr)
+            if valclass==self.__class__:
+                imports_tmp, lines_tmp = val._write(prepend+attr, attr_imports, class_imports, attr_reprs, class_reprs)
                 imports.update(imports_tmp)
                 lines.extend(lines_tmp)
             else:
-                imports.update(self._get_imports(val))
+                # precedence: attr-specific > class-specific > default
+                imports.update(self._get_imports(attr, val, attr_imports, class_imports))
+                repr_fn = attr_reprs.get(attr, class_reprs.get(valclass, repr))
                 # todo: detect cases where repr() doesn't work as desired - requires eval()?
-                lines.append(prepend+str(attr)+" = "+repr(val))
+                lines.append(prepend+str(attr)+" = "+repr_fn(val))
         return imports, lines
 
     # recursively check imports (avoiding infinite recursion in self-referential case)
-    def _get_imports(self, val, checked=None):
+    def _get_imports(self, attr, val, attr_imports, class_imports, checked=None):
         valclass = val.__class__
         if checked is None: checked = set()
         imports = set()
-        if id(val) not in checked:
+
+        def default_import(val):
+            valclass = val.__class__
             if valclass.__module__=='__builtin__':
                 if valclass.__name__=='module':
-                    imports.add("import {}".format(val.__name__))
+                    return "import {}".format(val.__name__)
             else:
-                imports.add("from {} import {}".format(valclass.__module__,valclass.__name__))
+                return "from {} import {}".format(valclass.__module__,valclass.__name__)
+            return None
+
+        if id(val) not in checked:
+            # precedence: attr-specific > class-specific > defaults
+            attr_imports_actual = {} if attr is None else attr_imports
+            import_fn = attr_imports_actual.get(attr, class_imports.get(valclass, default_import))
+            imports_to_add = import_fn(val)
+            if imports_to_add is not None:
+                imports.add(imports_to_add)
 
             checked.add(id(val))
 
@@ -94,7 +116,8 @@ class MagiConfig(argparse.Namespace):
                     pass
             if coll is not None:
                 for subval in coll:
-                    imports.update(self._get_imports(subval, checked))
+                    # will be applied to keys and values separately for dicts, i.e. attr-specific only use for MagiConfigs
+                    imports.update(self._get_imports(None, subval, attr_imports, class_imports, checked))
 
         return imports
 
@@ -436,11 +459,11 @@ class ArgumentParser(argparse.ArgumentParser):
         self._init_config()
 
     # write namespace into file using config_obj
-    def write_config(self, namespace, filename, obj=None):
+    def write_config(self, namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None):
         if obj is None:
             if self.config_options is not None: obj = self.config_options.obj
             else: obj = "config"
-        namespace.write(filename,obj)
+        namespace.write(filename, obj, attr_imports, class_imports, attr_reprs, class_reprs)
 
     # add config-only arguments
     # args: no default value, not required

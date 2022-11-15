@@ -616,6 +616,27 @@ class test_config_write_read_selfref(MagiConfigTest):
             return False
 '''
 
+class test_config_write_read_OrderedDict_custom(MagiConfigTest):
+    def test(self):
+        def reprOD(obj):
+            import json
+            lines = ["OrderedDict(["]
+            for key,val in six.iteritems(obj):
+                lines.append('    ({}, {}),'.format(repr(key), json.dumps(val, sort_keys=True)))
+            lines.append("])")
+            return '\n'.join(lines)
+        class_reprs = {OrderedDict: reprOD}
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions())
+        parser.add_argument("-d","--dict", type=OrderedDict, default=OrderedDict(), help="dict arg")
+        config_in = magiconfig.MagiConfig(
+            dict = OrderedDict([(1,2)]),
+        )
+        parser.write_config(config_in, "config_tmp6.py", class_reprs=class_reprs)
+        expected_config = 'from magiconfig import MagiConfig\nfrom collections import OrderedDict\n\nconfig = MagiConfig()\nconfig.dict = OrderedDict([\n    (1, 2),\n])'
+        with open("config_tmp6.py",'r') as infile:
+            infile_read = infile.read()
+            return expected_config == infile_read
+
 class test_config_default_type(MagiConfigTest):
     def test(self):
         parser = make_parser()

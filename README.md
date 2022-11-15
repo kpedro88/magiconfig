@@ -14,16 +14,15 @@ Table of Contents
       * [set_config_options(**kwargs)](#set_config_optionskwargs)
       * [copy_config_options(config_options)](#copy_config_optionsconfig_options)
       * [remove_config_options()](#remove_config_options)
-      * [write_config(namespace, filename, obj=None)](#write_confignamespace-filename-objnone)
+      * [write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
       * [add_config_only(*args, **kwargs)](#add_config_onlyargs-kwargs)
       * [remove_config_only(arg)](#remove_config_onlyarg)
       * [remove_argument(arg, keep=False)](#remove_argumentarg-keepfalse)
    * [MagiConfigOptions](#magiconfigoptions)
       * [Constructor](#constructor-1)
    * [MagiConfig](#magiconfig-1)
-      * [write(filename, config_obj)](#writefilename-config_obj)
+      * [write(filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)](#writefilename-config_obj-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
       * [join(other_config, prefer_other=False)](#joinother_config-prefer_otherfalse)
-      * [getattr(), setattr()](#getattr-setattr)
    * [MagiConfigError](#magiconfigerror)
    * [Other](#other)
       * [Subparser aliases](#subparser-aliases)
@@ -99,13 +98,23 @@ Raises [`MagiConfigError`](#MagiConfigError) if an object with any unknown param
 
 This function allows removing all config options from the parser.
 
-#### `write_config(namespace, filename, obj=None)`
+#### `write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)`
 
 * `namespace`: [`MagiConfig`](#MagiConfig-1) object to be written
 * `filename`: name of file to write
 * `obj`: name of the [`MagiConfig`](#MagiConfig-1) object in the file (default: class member `config_options.obj` or `"config"` if no `config_options` specified)
+* `attr_imports`: dictionary with key = attribute name, value = function returning a string of `import` statements
+* `class_imports`: dictionary with key = class type, value = function returning a string of `import` statements
+* `attr_reprs`: dictionary with key = attribute name, value = function returning a `repr`-style string
+* `class_reprs`: dictionary with key = class type, value = function returning a `repr`-style string
 
 This function can be used to preserve the state of the configuration after any command-line modifications (see [Example 1](#1-basic-setup)).
+By default, the class module and name of each entry in the configuration are used to determine if import statements are needed,
+and `repr()` is used to provide a representation of the entry from which it can be reconstructed.
+(If an entry is a `Collection` or `Mapping` type, its entries are also inspected for imports. For other `Container` types, their entries are expected if they can be obtained via `vars()`.)
+If these defaults are not correct for a given entry or a given class type, they can be overridden by providing custom functions using the options
+`attr_imports`, `class_imports`, `attr_reprs`, `class_reprs` as described above.
+The order of precedence is: `attr_* > class_* > default`.
 
 #### `add_config_only(*args, **kwargs)`
 
@@ -161,10 +170,11 @@ The values for `args`, `obj_args`, and `strict_args` can be positional arguments
 This class extends `argparse.Namespace` to add a few useful methods.
 It is used both as the input object in config files and as the output object of [`ArgumentParser`](#ArgumentParser).
 
-#### `write(filename, config_obj)`
+#### `write(filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)`
 
 * `filename`: name of file to write
 * `config_obj`: name of [`MagiConfig`](#MagiConfig-1) object in file
+* other options: see documentation for [`ArgumentParser.write_config()`](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
 
 #### `join(other_config, prefer_other=False)`
 
@@ -193,7 +203,7 @@ This class derives from `Exception` and denotes magiconfig-specific errors.
 
 #### Subparser aliases
 
-`_SubParsersAction.add_parser` is modified to backport the use of subparsers aliases to Python 2.
+`_SubParsersAction.add_parser` is modified to backport the use of subparser aliases to Python 2.
 
 #### Convenience
 

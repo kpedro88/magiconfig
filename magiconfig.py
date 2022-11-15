@@ -5,6 +5,7 @@ import collections
 from six.moves.collections_abc import Sized, Iterable, Container, Mapping
 import functools
 import types
+import warnings
 
 # from https://github.com/python/cpython/blob/main/Lib/_collections_abc.py
 # missing from python < 3.6
@@ -27,6 +28,13 @@ class Collection(Sized, Iterable, Container):
         if cls is Collection:
             return _check_methods(C,  "__len__", "__iter__", "__contains__")
         return NotImplemented
+
+# from numpy
+class VisibleDeprecationWarning(UserWarning):
+    pass
+
+def deprecation(message):
+    warnings.warn(message, VisibleDeprecationWarning, stacklevel=2)
 
 # from https://stackoverflow.com/questions/31174295/getattr-and-setattr-on-nested-subobjects-chained-properties/31174427#31174427
 def _rgetattr(obj, attr, *args):
@@ -210,7 +218,6 @@ class ArgumentParser(argparse.ArgumentParser):
         self._config_only = {}
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
-        self._config_only_required = set()
 
         # initialize config args from options
         self._init_config()
@@ -428,7 +435,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._required = self._suppress_required(possible_required_actions)
 
         # check missing required config-only args
-        config_only_missing = self._config_only_required - set([attr for attr in flat_vars])
+        config_only_missing = set([dest for dest,action in six.iteritems(self._config_only) if action.required]) - set([attr for attr in flat_vars])
         if len(config_only_missing)>0:
             raise MagiConfigError("Imported config missing required attributes: "+','.join(sorted(list(config_only_missing))))
 
@@ -469,31 +476,97 @@ class ArgumentParser(argparse.ArgumentParser):
     # args: no default value, not required
     # kwargs: default value OR required (value=None)
     def add_config_only(self, *args, **kwargs):
+        deprecation("ArgumentParser.add_config_only() is deprecated and will be removed in magiconfig 3.0.0; please switch to ArgumentParser.add_config_argument().")
+
         # check for existing dests
         existing_dests = [arg for arg in list(args) + list(kwargs) if arg in self._dests_actions]
-        if len(existing_dests)>0: raise MagiConfigError("the following dests are already used by regular (not config-only) args: "+', '.join(existing_dests))
+        if len(existing_dests)>0: raise MagiConfigError("the following dests are already used by regular (not config-only) arguments: "+', '.join(existing_dests))
 
-        self._config_only.update(kwargs)
-        self._config_only.update({key:None for key in args})
-
-        # find any args that have changed required status
-        self._config_only_required = (self._config_only_required | set([key for key in kwargs if kwargs[key] is None])) - set([key for key in kwargs if kwargs[key] is not None])
+        for dest,default in six.iteritems(kwargs):
+            if default is None:
+                self.add_config_argument(dest, required=True)
+            else:
+                self.add_config_argument(dest, default=default)
+        for dest in args:
+            self.add_config_argument(dest)
 
     # remove config-only argument
     def remove_config_only(self, arg):
-        self._config_only.pop(arg)
-        if arg in self._config_only_required: self._config_only_required.remove(arg)
+        deprecation("ArgumentParser.remove_config_only() is deprecated and will be removed in magiconfig 3.0.0; please switch to ArgumentParser.remove_config_argument().")
+
+        self.remove_config_argument(arg)
+
+    def _get_config_only_kwargs(self, arg, **kwargs):
+        return dict(kwargs, dest=arg, option_strings=[])
+
+    # add a config-only argument
+    # available properties: default, type, choices, required, help
+    # mostly based on argparse add_argument()
+    def add_config_argument(self, arg, **kwargs):
+        kwargs = self._get_config_only_kwargs(arg, **kwargs)
+
+        # if no default was supplied, use the parser-level default
+        if 'default' not in kwargs:
+            dest = kwargs['dest']
+            if dest in self._defaults:
+                kwargs['default'] = self._defaults[dest]
+            elif self.argument_default is not None:
+                kwargs['default'] = self.argument_default
+
+        # if not required, treat as optional (needed for some argparse handling, e.g. help w/ no default specified)
+        if not kwargs.get('required',False):
+            kwargs['nargs'] = argparse.OPTIONAL
+
+        # create the (dummy) action object, and add it to the parser
+        action_class = self._pop_action_class(kwargs)
+        if not callable(action_class):
+            raise ValueError('unknown action "%s"' % (action_class,))
+        action = action_class(**kwargs)
+
+        # raise an error if the action type is not callable
+        type_func = self._registry_get('type', action.type, action.type)
+        if not callable(type_func):
+            raise ValueError('%r is not callable' % (type_func,))
+
+        if type_func is FileType:
+            raise ValueError('%r is a FileType class object, instance of it'
+                             ' must be passed' % (type_func,))
+
+        action = self._add_config_only_action(action)
+        if action.help is None:
+            if action.required: action.help = "(required)"
+            elif action.default is not None: action.help = " " # must be non-None string to activate default formatting
+            #else: action.help = " "
+
+        return action
 
     # keep map of dest:action(s)
     _add_action_orig = argparse.ArgumentParser._add_action
 
     def _add_action(self, action):
         # check against config-only
-        if action.dest in self._config_only: raise argparse.ArgumentError(action, "dest {} already specified as config-only".format(action.dest))
+        if action.dest in self._config_only: raise argparse.ArgumentError(action, "dest {} already specified as config-only argument".format(action.dest))
 
         action = self._add_action_orig(action)
         self._dests_actions[action.dest].append(action)
         return action
+
+    def _add_config_only_action(self, action):
+        # check for existing dests
+        if action.dest in self._config_only: raise argparse.ArgumentError(action, "conflicting config-only dest: {}".format(action.dest))
+        if action.dest in self._dests_actions: raise argparse.ArgumentError(action, "dest {} already specified as regular (not config-only) argument".format(action.dest))
+
+        # add to actions list
+        self._config_only[action.dest] = action
+        action.container = self
+
+        return action
+
+    def remove_config_argument(self, arg, keep=False):
+        if arg in self._config_only:
+            self._config_only.pop(arg)
+        else:
+            self.error("attempt to remove unrecognized config-only argument: {}".format(arg))
 
     _remove_action = _remove_action_all
 
@@ -543,25 +616,8 @@ class ArgumentParser(argparse.ArgumentParser):
         # config-only args
         if len(self._config_only)>0 and self._config_only_help:
             formatter.start_section("config-only arguments")
-            # convert to fake actions to make use of existing HelpFormatter methods
-            config_only_actions = []
-            for arg in sorted(self._config_only):
-                kwarg = dict(
-                    option_strings = [],
-                    dest = arg,
-                )
-                if arg in self._config_only_required:
-                    kwarg.update(
-                        required = True,
-                        help = "(required)",
-                    )
-                elif self._config_only[arg] is not None:
-                    kwarg.update(
-                        default = self._config_only[arg],
-                        nargs = argparse.OPTIONAL,
-                        help = " ", # must be non-None string to activate default formatting
-                    )
-                config_only_actions.append(argparse._StoreAction(**kwarg))
+            # get list of (dummy) actions
+            config_only_actions = [action for dest,action in six.iteritems(self._config_only)]
             formatter.add_arguments(config_only_actions)
             formatter.end_section()
 

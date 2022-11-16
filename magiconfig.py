@@ -7,6 +7,8 @@ import functools
 import types
 import warnings
 
+__version__ = "2.4.0"
+
 # from https://github.com/python/cpython/blob/main/Lib/_collections_abc.py
 # missing from python < 3.6
 def _check_methods(C, *methods):

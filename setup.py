@@ -1,11 +1,12 @@
 import setuptools
+from magiconfig import __version__
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="magiconfig",
-    version="2.3.1",
+    version=__version__,
     author="Kevin Pedro",
     author_email="kpedro88@gmail.com",
     description="An extension of argparse to configure Python with Python",

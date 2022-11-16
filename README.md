@@ -14,7 +14,7 @@ Table of Contents
       * [set_config_options(**kwargs)](#set_config_optionskwargs)
       * [copy_config_options(config_options)](#copy_config_optionsconfig_options)
       * [remove_config_options()](#remove_config_options)
-      * [write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
+      * [write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False)](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone-strictfalse)
       * [add_config_argument(arg, **kwargs)](#add_config_argumentarg-kwargs)
       * [remove_config_argument(arg)](#remove_config_argumentarg)
       * [add_config_only(*args, **kwargs)](#add_config_onlyargs-kwargs)
@@ -23,7 +23,7 @@ Table of Contents
    * [MagiConfigOptions](#magiconfigoptions)
       * [Constructor](#constructor-1)
    * [MagiConfig](#magiconfig-1)
-      * [write(filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)](#writefilename-config_obj-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
+      * [write(filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False)](#writefilename-config_obj-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone-strictfalse)
       * [join(other_config, prefer_other=False)](#joinother_config-prefer_otherfalse)
    * [MagiConfigError](#magiconfigerror)
    * [Other](#other)
@@ -100,7 +100,7 @@ Raises [`MagiConfigError`](#MagiConfigError) if an object with any unknown param
 
 This function allows removing all config options from the parser.
 
-#### `write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)`
+#### `write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False)`
 
 * `namespace`: [`MagiConfig`](#MagiConfig-1) object to be written
 * `filename`: name of file to write
@@ -109,6 +109,7 @@ This function allows removing all config options from the parser.
 * `class_imports`: dictionary with key = class type, value = function returning a string of `import` statements
 * `attr_reprs`: dictionary with key = attribute name, value = function returning a `repr`-style string
 * `class_reprs`: dictionary with key = class type, value = function returning a `repr`-style string
+* `strict`: for each attribute, check if calling `eval()` on the `repr`-style string returns the original value
 
 This function can be used to preserve the state of the configuration after any command-line modifications (see [Example 1](#1-basic-setup)).
 By default, the class module and name of each entry in the configuration are used to determine if import statements are needed,
@@ -117,6 +118,7 @@ and `repr()` is used to provide a representation of the entry from which it can 
 If these defaults are not correct for a given entry or a given class type, they can be overridden by providing custom functions using the options
 `attr_imports`, `class_imports`, `attr_reprs`, `class_reprs` as described above.
 The order of precedence is: `attr_* > class_* > default`.
+Strict checking of the validity of `repr`-style strings is currently disabled by default, but may be enabled by default in the next major release (3.0.0).
 
 #### `add_config_argument(arg, **kwargs)`
 
@@ -187,11 +189,11 @@ The values for `args`, `obj_args`, and `strict_args` can be positional arguments
 This class extends `argparse.Namespace` to add a few useful methods.
 It is used both as the input object in config files and as the output object of [`ArgumentParser`](#ArgumentParser).
 
-#### `write(filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)`
+#### `write(filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False)`
 
 * `filename`: name of file to write
 * `config_obj`: name of [`MagiConfig`](#MagiConfig-1) object in file
-* other options: see documentation for [`ArgumentParser.write_config()`](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
+* other options: see documentation for [`ArgumentParser.write_config()`](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone-strictfalse)
 
 #### `join(other_config, prefer_other=False)`
 

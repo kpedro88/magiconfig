@@ -47,7 +47,7 @@ class MagiConfigError(Exception):
     pass
 
 class MagiConfig(argparse.Namespace):
-    def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None):
+    def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
         if len(config_obj)==0:
             raise MagiConfigError("config_obj must be specified")
 
@@ -59,13 +59,13 @@ class MagiConfig(argparse.Namespace):
 
         # get lines to write
         default_imports = ["from magiconfig import MagiConfig"]
-        imports, lines = self._write(config_obj, attr_imports, class_imports, attr_reprs, class_reprs)
+        imports, lines = self._write(config_obj, attr_imports, class_imports, attr_reprs, class_reprs, strict)
 
         # write namespace into file
         with open(filename,'w') as outfile:
             outfile.write('\n'.join(default_imports+sorted(list(imports))+[""]+lines))
 
-    def _write(self, config_obj, attr_imports, class_imports, attr_reprs, class_reprs):
+    def _write(self, config_obj, attr_imports, class_imports, attr_reprs, class_reprs, strict):
         imports = set()
         # create a magiconfig
         lines = [config_obj+" = MagiConfig()"]
@@ -74,15 +74,29 @@ class MagiConfig(argparse.Namespace):
             valclass = val.__class__
             # recurse for nested configs
             if valclass==self.__class__:
-                imports_tmp, lines_tmp = val._write(prepend+attr, attr_imports, class_imports, attr_reprs, class_reprs)
+                imports_tmp, lines_tmp = val._write(prepend+attr, attr_imports, class_imports, attr_reprs, class_reprs, strict)
                 imports.update(imports_tmp)
                 lines.extend(lines_tmp)
             else:
                 # precedence: attr-specific > class-specific > default
                 imports.update(self._get_imports(attr, val, attr_imports, class_imports))
                 repr_fn = attr_reprs.get(attr, class_reprs.get(valclass, repr))
-                # todo: detect cases where repr() doesn't work as desired - requires eval()?
-                lines.append(prepend+str(attr)+" = "+repr_fn(val))
+                repr_val = repr_fn(val)
+                # detect cases where repr() doesn't work as desired
+                if strict:
+                    try:
+                        repr_worked = eval(repr_val)
+                    # catch cases where eval(repr) completely fails
+                    except:
+                        repr_worked = False
+                    if not repr_worked:
+                        error_lines = [
+                            "Inconsistency between original value and repr for {}:".format(prepend+attr),
+                            val,
+                            repr_val,
+                        ]
+                        raise MagiConfigError('\n'.join(error_lines))
+                lines.append(prepend+str(attr)+" = "+repr_val)
         return imports, lines
 
     # recursively check imports (avoiding infinite recursion in self-referential case)
@@ -466,11 +480,11 @@ class ArgumentParser(argparse.ArgumentParser):
         self._init_config()
 
     # write namespace into file using config_obj
-    def write_config(self, namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None):
+    def write_config(self, namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
         if obj is None:
             if self.config_options is not None: obj = self.config_options.obj
             else: obj = "config"
-        namespace.write(filename, obj, attr_imports, class_imports, attr_reprs, class_reprs)
+        namespace.write(filename, obj, attr_imports, class_imports, attr_reprs, class_reprs, strict)
 
     # add config-only arguments
     # args: no default value, not required

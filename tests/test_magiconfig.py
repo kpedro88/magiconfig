@@ -734,6 +734,20 @@ class test_config_write_read_OrderedDict_custom(MagiConfigTest):
             infile_read = infile.read()
             return expected_config == infile_read
 
+class test_config_write_strict(MagiConfigTest):
+    def test(self):
+        config = magiconfig.MagiConfig(
+            d = {},
+        )
+        config.d[1] = config.d
+        # repr for a self-referential object includes "...", will not eval to original
+        try:
+            config.write("config_tmp7.py", "config", strict=True)
+        except:
+            return True
+        else:
+            return False
+
 class test_config_default_type(MagiConfigTest):
     def test(self):
         parser = make_parser()

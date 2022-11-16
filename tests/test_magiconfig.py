@@ -376,7 +376,11 @@ class test_remove_unknown_arg(MagiConfigTest):
         else:
             return False
 
-class test_config_only_required(MagiConfigTest):
+###############################
+# Tests of deprecated interface
+###############################
+
+class test_config_only_deprecated_required(MagiConfigTest):
     def test(self):
         parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
             strict = True
@@ -391,7 +395,7 @@ class test_config_only_required(MagiConfigTest):
         else:
             return False
 
-class test_config_only_remove(MagiConfigTest):
+class test_config_only_deprecated_remove(MagiConfigTest):
     def test(self):
         parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
             strict = True
@@ -409,7 +413,7 @@ class test_config_only_remove(MagiConfigTest):
         else:
             return False
 
-class test_config_only_help(MagiConfigTest):
+class test_config_only_deprecated_deprecated_help(MagiConfigTest):
     def test(self):
         parser = make_parser(magiconfig.ArgumentParser(
             config_options=magiconfig.MagiConfigOptions(
@@ -427,7 +431,7 @@ class test_config_only_help(MagiConfigTest):
         actual_help = parser.format_help()
         return expected_help==actual_help
 
-class test_config_only_already_used(MagiConfigTest):
+class test_config_only_deprecated_already_used(MagiConfigTest):
     def test(self):
         parser = make_parser()
         try:
@@ -437,7 +441,7 @@ class test_config_only_already_used(MagiConfigTest):
         else:
             return False
 
-class test_dest_already_config_only(MagiConfigTest):
+class test_dest_already_config_only_deprecated(MagiConfigTest):
     def test(self):
         parser = make_parser()
         parser.add_config_only("arg1")
@@ -447,6 +451,124 @@ class test_dest_already_config_only(MagiConfigTest):
             return True
         else:
             return False
+
+class test_remove_action_then_config_only_deprecated(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.remove_argument('-b')
+        try:
+            parser.add_config_only("bar")
+        except:
+            return False
+        else:
+            return True
+
+class test_default_config_only_deprecated(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.remove_argument("-i")
+        parser.add_config_only("ipsum")
+        parser.set_defaults(ipsum = True)
+        args = parser.parse_args(args=["-C","tests/test_config.py"])
+        expected = magiconfig.MagiConfig(
+            bar = 2.0,
+            foo = '2',
+            ipsum = False,
+        )
+        return args==expected
+
+###############################
+# Corresponding tests of new interface
+###############################
+
+class test_config_only_required(MagiConfigTest):
+    def test(self):
+        parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+            strict = True
+        )))
+        parser.add_config_argument("extra",required=True)
+        try:
+            args = parser.parse_args(args=["-C","tests/test_config.py"])
+        except:
+            return True
+        else:
+            return False
+
+class test_config_only_remove(MagiConfigTest):
+    def test(self):
+        parser = make_parser(magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(
+            strict = True
+        )))
+        parser.add_config_argument("extra")
+        parser.remove_config_argument("extra")
+        try:
+            args = parser.parse_args(args=["-C","tests/test_config3.py"])
+        except:
+            return True
+        else:
+            return False
+
+class test_config_only_help(MagiConfigTest):
+    def test(self):
+        parser = make_parser(magiconfig.ArgumentParser(
+            config_options=magiconfig.MagiConfigOptions(
+                strict = True
+            ),
+            prog="PROG",
+            formatter_class=magiconfig.ArgumentDefaultsHelpFormatter,
+        ))
+        parser.add_config_argument("arg1")
+        parser.add_config_argument("arg2",required=True)
+        parser.add_config_argument("arg3",default="test")
+        expected_help = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -C CONFIG, --config CONFIG\n                        name of config file to import (w/ object: config)\n                        (default: None)\n  -f FOO, --foo FOO     foo arg (default: lorem)\n  -b BAR, --bar BAR     bar arg (default: None)\n  -i, --ipsum           ipsum arg (default: False)\n\nconfig-only arguments:\n  arg1\n  arg2                  (required)\n  arg3                  (default: test)\n"
+        actual_help = parser.format_help()
+        return expected_help==actual_help
+
+class test_config_only_already_used(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        try:
+            parser.add_config_argument("bar")
+        except:
+            return True
+        else:
+            return False
+
+class test_dest_already_config_only(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.add_config_argument("arg1")
+        try:
+            parser.add_argument("-a","--arg", dest="arg1", type=str, default="", help="arg1")
+        except:
+            return True
+        else:
+            return False
+
+class test_remove_action_then_config_only(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.remove_argument('-b')
+        try:
+            parser.add_config_argument("bar")
+        except:
+            return False
+        else:
+            return True
+
+class test_default_config_only(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.remove_argument("-i")
+        parser.add_config_argument("ipsum")
+        parser.set_defaults(ipsum = True)
+        args = parser.parse_args(args=["-C","tests/test_config.py"])
+        expected = magiconfig.MagiConfig(
+            bar = 2.0,
+            foo = '2',
+            ipsum = False,
+        )
+        return args==expected
 
 class test_set_config_from_none(MagiConfigTest):
     def test(self):
@@ -481,31 +603,6 @@ class test_remove_config_options(MagiConfigTest):
             return True
         else:
             return False
-
-class test_remove_action_then_config_only(MagiConfigTest):
-    def test(self):
-        parser = make_parser()
-        parser.remove_argument('-b')
-        try:
-            parser.add_config_only("bar")
-        except:
-            return False
-        else:
-            return True
-
-class test_default_config_only(MagiConfigTest):
-    def test(self):
-        parser = make_parser()
-        parser.remove_argument("-i")
-        parser.add_config_only("ipsum")
-        parser.set_defaults(ipsum = True)
-        args = parser.parse_args(args=["-C","tests/test_config.py"])
-        expected = magiconfig.MagiConfig(
-            bar = 2.0,
-            foo = '2',
-            ipsum = False,
-        )
-        return args==expected
 
 class test_nargs_config(MagiConfigTest):
     def test(self):

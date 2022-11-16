@@ -1,4 +1,5 @@
 from magiconfig import ArgumentParser, MagiConfigOptions, ArgumentDefaultsRawHelpFormatter
+from collections import OrderedDict
 import six
 
 if __name__=="__main__":
@@ -8,7 +9,11 @@ if __name__=="__main__":
         "training": ["size","weights"],
         "hyper": ["learning_rate","loss"],
     }
-    config_schema_flat = [key+"."+val for key,vals in six.iteritems(config_schema) for val in vals]
+    config_schema_flat = OrderedDict([(key+"."+val, {}) for key,vals in six.iteritems(config_schema) for val in vals])
+    # specify default value, required args
+    config_schema_flat["dataset.path"] = {"default": "/data"}
+    config_schema_flat["dataset.background"] = {"required": True}
+    config_schema_flat["dataset.signal"] = {"required": True}
 
     parser = ArgumentParser(
         config_options=MagiConfigOptions(
@@ -18,8 +23,8 @@ if __name__=="__main__":
     )
     parser.add_argument("-v","--verbose", dest="verbose", action="store_true", help="enable verbose output")
     # include schema in parser
-    parser.add_config_only(*config_schema_flat)
-    # include a default value and some required
-    parser.add_config_only(**{"dataset.path": "/data", "dataset.background": None, "dataset.signal": None})
+    for arg,kwargs in six.iteritems(config_schema_flat):
+        parser.add_config_argument(arg, **kwargs)
+
     args = parser.parse_args()
     if args.verbose: six.print_(args)

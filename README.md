@@ -15,6 +15,8 @@ Table of Contents
       * [copy_config_options(config_options)](#copy_config_optionsconfig_options)
       * [remove_config_options()](#remove_config_options)
       * [write_config(namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None)](#write_confignamespace-filename-objnone-attr_importsnone-class_importsnone-attr_reprsnone-class_reprsnone)
+      * [add_config_argument(arg, **kwargs)](#add_config_argumentarg-kwargs)
+      * [remove_config_argument(arg)](#remove_config_argumentarg)
       * [add_config_only(*args, **kwargs)](#add_config_onlyargs-kwargs)
       * [remove_config_only(arg)](#remove_config_onlyarg)
       * [remove_argument(arg, keep=False)](#remove_argumentarg-keepfalse)
@@ -65,7 +67,7 @@ The API of this class is extended with several additional functions to manage co
 
 The constructor supports several additional options:
 * `config_options`: takes an instance of [`MagiConfigOptions`](#MagiConfigOptions); default = `None` (falls back to standard argparse behavior)
-* `config_only_help`: include config-only args in the help message (see [`add_config_only()`](#add_config_onlyargs-kwargs)); default = `True`
+* `config_only_help`: include config-only args in the help message (see [`add_config_argument()`](#add_config_argumentarg-kwargs)); default = `True`
 
 #### `parse_args(), parse_known_args()`
 
@@ -116,7 +118,20 @@ If these defaults are not correct for a given entry or a given class type, they 
 `attr_imports`, `class_imports`, `attr_reprs`, `class_reprs` as described above.
 The order of precedence is: `attr_* > class_* > default`.
 
+#### `add_config_argument(arg, **kwargs)`
+
+This interface allows adding a dest (`arg`) that is only provided by the config, not by a command-line argument.
+The supported `kwargs` are: `default`, `type`, `choices`, `required`, `help` (an appropriate subset of `argparse.ArgumentParser.add_argument()`).
+
+#### `remove_config_argument(arg)`
+
+* `arg`: name of config-only arg to remove
+
+Raises `KeyError` if arg is not found in the list of config-only args.
+
 #### `add_config_only(*args, **kwargs)`
+
+**This function is deprecated and will be removed in magiconfig 3.0.0; please switch to [add_config_argument()](#add_config_argumentarg-kwargs).**
 
 This interface allows adding dests that are only provided by the config, not by command-line arguments.
 
@@ -127,6 +142,8 @@ Raises [`MagiConfigError`](#MagiConfigError) if any dests have already been used
 Similarly, `add_argument()` now raises `ArgumentError` if it specifies a dest that has already been added as config-only by this function.
 
 #### `remove_config_only(arg)`
+
+**This function is deprecated and will be removed in magiconfig 3.0.0; please switch to [remove_config_argument()](#remove_config_argumentarg).**
 
 * `arg`: name of config-only arg to remove
 

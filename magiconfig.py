@@ -215,7 +215,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._config_only_help = kwargs.pop("config_only_help", True)
         # must be defined before base class constructor is called
         self._dests_actions = collections.defaultdict(list)
-        self._config_only = {}
+        self._config_only = collections.OrderedDict()
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
 
@@ -482,13 +482,13 @@ class ArgumentParser(argparse.ArgumentParser):
         existing_dests = [arg for arg in list(args) + list(kwargs) if arg in self._dests_actions]
         if len(existing_dests)>0: raise MagiConfigError("the following dests are already used by regular (not config-only) arguments: "+', '.join(existing_dests))
 
+        for dest in args:
+            self.add_config_argument(dest)
         for dest,default in six.iteritems(kwargs):
             if default is None:
                 self.add_config_argument(dest, required=True)
             else:
                 self.add_config_argument(dest, default=default)
-        for dest in args:
-            self.add_config_argument(dest)
 
     # remove config-only argument
     def remove_config_only(self, arg):
@@ -562,7 +562,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
         return action
 
-    def remove_config_argument(self, arg, keep=False):
+    def remove_config_argument(self, arg):
         if arg in self._config_only:
             self._config_only.pop(arg)
         else:

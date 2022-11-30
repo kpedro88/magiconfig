@@ -477,6 +477,17 @@ class test_default_config_only_deprecated(MagiConfigTest):
         )
         return args==expected
 
+class test_config_only_deprecated_change(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.add_config_only(*["extra"])
+        try:
+            parser.add_config_only(**{"extra":None})
+        except:
+            return False
+        else:
+            return True
+
 ###############################
 # Corresponding tests of new interface
 ###############################

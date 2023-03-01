@@ -628,6 +628,19 @@ class test_nargs_config(MagiConfigTest):
         )
         return args==expected
 
+class test_nargs_config_none(MagiConfigTest):
+    def test(self):
+        parser = make_parser()
+        parser.add_argument("-n", "--names", dest="names", default=[], nargs='+', help = "names arg")
+        args = parser.parse_args(args=["-C","tests/test_config4c.py"])
+        expected = magiconfig.MagiConfig(
+            bar = 2.0,
+            foo = '2',
+            ipsum = False,
+            names = OrderedDict([("Alice",True)]),
+        )
+        return args==expected
+
 class test_choices_config(MagiConfigTest):
     def test(self,config="tests/test_config4.py",should_fail=True,nargs='+',choices=["Alice","Carol"]):
         parser = make_parser()

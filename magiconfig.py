@@ -441,7 +441,7 @@ class ArgumentParser(argparse.ArgumentParser):
                         tmp = bool(tmp)
                     # generically handle any other cases with nargs=0
                     elif tmp_action.nargs==0:
-                        if action.type: tmp = action.type(tmp)
+                        if tmp_action.type: tmp = tmp_action.type(tmp)
                     else:
                         # _get_values() expects a list
                         if not isinstance(tmp,list): tmp = [tmp]

@@ -428,8 +428,8 @@ class ArgumentParser(argparse.ArgumentParser):
         for attr,val in six.iteritems(flat_vars):
             if attr in self._dests_actions or attr in self._config_only:
                 tmp = val
-                # check type if uniquely provided
-                if len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1:
+                # check type if uniquely provided (and not None)
+                if (len(self._dests_actions[attr])==1 or len(set([action.type for action in self._dests_actions[attr]]))==1) and self._dests_actions[attr][0].type is not None:
                     # use _get_values() rather than _get_value() to handle nargs cases; also enforces choices if any
                     tmp_action = self._dests_actions[attr][0]
                     # argparse does not apply type or choice checks to default args

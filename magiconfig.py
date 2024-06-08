@@ -222,6 +222,40 @@ def _remove_action_all(self, action, throw=True):
             group._group_actions.remove(action)
         _remove_action_all(group,action,throw=False)
 
+class _ArgumentGroup(argparse._ArgumentGroup):
+    def __init__(self, container, *args, **kwargs):
+        argparse._ArgumentGroup.__init__(self, container, *args, **kwargs)
+        self._dests_actions = container._dests_actions
+        self._config_only = container._config_only
+
+    # keep map of dest:action(s)
+    _add_action_orig = argparse._ArgumentGroup._add_action
+
+    def _add_action(self, action):
+        # check against config-only
+        if action.dest in self._config_only: raise argparse.ArgumentError(action, "dest {} already specified as config-only argument".format(action.dest))
+
+        action = self._add_action_orig(action)
+        self._dests_actions[action.dest].append(action)
+        return action
+
+class _MutuallyExclusiveGroup(argparse._MutuallyExclusiveGroup):
+    def __init__(self, container, **kwargs):
+        argparse._MutuallyExclusiveGroup.__init__(self, container, **kwargs)
+        self._dests_actions = container._dests_actions
+        self._config_only = container._config_only
+
+    # keep map of dest:action(s)
+    _add_action_orig = argparse._MutuallyExclusiveGroup._add_action
+
+    def _add_action(self, action):
+        # check against config-only
+        if action.dest in self._config_only: raise argparse.ArgumentError(action, "dest {} already specified as config-only argument".format(action.dest))
+
+        action = self._add_action_orig(action)
+        self._dests_actions[action.dest].append(action)
+        return action
+
 class ArgumentParser(argparse.ArgumentParser):
     # additional argument:
     # config_options: default is None, otherwise expects instance of MagiConfigOptions
@@ -561,16 +595,18 @@ class ArgumentParser(argparse.ArgumentParser):
 
         return action
 
-    # keep map of dest:action(s)
-    _add_action_orig = argparse.ArgumentParser._add_action
+    # directly copied (to use patched Group classes)
+    def add_argument_group(self, *args, **kwargs):
+        group = _ArgumentGroup(self, *args, **kwargs)
+        self._action_groups.append(group)
+        return group
 
-    def _add_action(self, action):
-        # check against config-only
-        if action.dest in self._config_only: raise argparse.ArgumentError(action, "dest {} already specified as config-only argument".format(action.dest))
+    def add_mutually_exclusive_group(self, **kwargs):
+        group = _MutuallyExclusiveGroup(self, **kwargs)
+        self._mutually_exclusive_groups.append(group)
+        return group
 
-        action = self._add_action_orig(action)
-        self._dests_actions[action.dest].append(action)
-        return action
+    # changes to _add_action are now made in the Group classes
 
     def _add_config_only_action(self, action):
         # check for existing dests

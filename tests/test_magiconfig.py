@@ -148,6 +148,41 @@ class test_inconsistent_type(MagiConfigTest):
         )
         return args==expected
 
+class test_groups(MagiConfigTest):
+    def test(self):
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(),prog="PROG")
+        replace_error_method(parser)
+        parser.add_argument("-f","--foo", dest="foo", type=str, default="lorem", help="foo arg")
+        group1 = parser.add_argument_group("group1")
+        group1.add_argument("-b","--bar", dest="bar", type=float, required=True, help="bar arg")
+        group2 = parser.add_argument_group("group2")
+        group2.add_argument("-i","--ipsum", dest="ipsum", action="store_true", help="ipsum arg")
+        args = parser.parse_args(args=["-C","tests/test_config.py"])
+        expected = magiconfig.MagiConfig(
+            bar = 2.0,
+            foo = '2',
+            ipsum = False,
+        )
+        return args==expected
+
+# this test currently fails
+# todo: keep a list of mutually exclusive *destinations* informed by mutually exclusive groups
+#       and check when parsing config *and* args
+class test_mutex_groups(MagiConfigTest):
+    def test(self):
+        parser = magiconfig.ArgumentParser(config_options=magiconfig.MagiConfigOptions(),prog="PROG")
+        replace_error_method(parser)
+        parser.add_argument("-f","--foo", dest="foo", type=str, default="lorem", help="foo arg")
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("-b","--bar", dest="bar", type=float, help="bar arg")
+        group.add_argument("-i","--ipsum", dest="ipsum", action="store_true", help="ipsum arg")
+        try:
+            args = parser.parse_args(args=["-C","tests/test_config.py"])
+        except:
+            return True
+        else:
+            return False
+
 class test_subparsers(MagiConfigTest):
     def test(self):
         # parser does not need config_options if it will have subparsers

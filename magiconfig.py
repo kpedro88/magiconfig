@@ -109,7 +109,7 @@ class MagiConfig(argparse.Namespace):
 
         def default_import(val):
             valclass = val.__class__
-            if valclass.__module__=='__builtin__':
+            if valclass.__module__=='__builtin__' or valclass.__module__=='builtins':
                 if valclass.__name__=='module':
                     return "import {}".format(val.__name__)
             else:

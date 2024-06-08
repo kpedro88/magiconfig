@@ -91,13 +91,12 @@ class MagiConfig(argparse.Namespace):
                     # catch cases where eval(repr) completely fails
                     except:
                         repr_worked = False
-                    if not repr_worked:
+                    if not repr_worked or repr_worked!=val:
                         error_lines = [
                             "Inconsistency between original value and repr for {}:".format(prepend+attr),
-                            val,
-                            repr_val,
+                            (val, repr_val)
                         ]
-                        raise MagiConfigError('\n'.join(error_lines))
+                        raise MagiConfigError('\n'.join(str(el) for el in error_lines))
                 lines.append(prepend+str(attr)+" = "+repr_val)
         return imports, lines
 

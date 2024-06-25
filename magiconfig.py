@@ -383,11 +383,20 @@ class ArgumentParser(argparse.ArgumentParser):
         if args is None: args = sys.argv[1:]
         else: args = list(args)
 
+        def check_subparser_config_actions():
+            if self._subparsers is None:
+                return False
+            subparser_objects = next((action.choices.values() for action in self._subparsers._actions if isinstance(action,argparse._SubParsersAction)),[])
+            # if any subparsers have config_actions, then return a MagiConfig
+            return any(parser._config_actions is not None for parser in subparser_objects)
+
+        # get correct namespace type
+        if self._config_actions is not None or check_subparser_config_actions():
+            namespace = self._check_namespace(namespace)
+
         # fall back to default argparse behavior
         if self._config_actions is None:
             return self.parse_known_args_orig(args=args,namespace=namespace)
-        else:
-            namespace = self._check_namespace(namespace)
 
         # create a subordinate instance with just the config options
         config_only_parser = ArgumentParser(

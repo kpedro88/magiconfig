@@ -206,6 +206,18 @@ class test_subparsers(MagiConfigTest):
         )
         return args_one==expected_one and args_two==expected_two
 
+class test_subparsers_arg_type(MagiConfigTest):
+    def test(self):
+        # parser does not need config_options if it will have subparsers
+        parser = magiconfig.ArgumentParser()
+        subparsers = parser.add_subparsers()
+        parser_one = subparsers.add_parser("one",config_options=magiconfig.MagiConfigOptions(
+            obj = "config.one"
+        ))
+        parser_one.add_argument("-f","--foo", dest="foo", type=str, default="lorem", help="foo arg")
+        args_one = parser.parse_args(args=["one","-C","tests/test_config_sub.py"])
+        return isinstance(args_one,magiconfig.MagiConfig)
+
 class test_config_join(MagiConfigTest):
     def test(self):
         config_one = magiconfig.MagiConfig(

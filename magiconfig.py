@@ -245,9 +245,6 @@ class ArgumentParser(argparse.ArgumentParser):
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
 
-        # to toggle legacy behavior
-        self._ignore_conflict_config_only = False
-
         # initialize config args from options
         self._init_config()
 
@@ -510,33 +507,6 @@ class ArgumentParser(argparse.ArgumentParser):
             else: obj = "config"
         namespace.write(filename, obj, attr_imports, class_imports, attr_reprs, class_reprs, strict)
 
-    # add config-only arguments
-    # args: no default value, not required
-    # kwargs: default value OR required (value=None)
-    def add_config_only(self, *args, **kwargs):
-        deprecation("ArgumentParser.add_config_only() is deprecated and will be removed in magiconfig 3.0.0; please switch to ArgumentParser.add_config_argument().")
-
-        # check for existing dests
-        existing_dests = [arg for arg in list(args) + list(kwargs) if arg in self._dests_actions]
-        if len(existing_dests)>0: raise MagiConfigError("the following dests are already used by regular (not config-only) arguments: "+', '.join(existing_dests))
-
-        # legacy behavior: add_config_only could be called for the same dest multiple times
-        self._ignore_conflict_config_only = True
-        for dest in args:
-            self.add_config_argument(dest)
-        for dest,default in kwargs.items():
-            if default is None:
-                self.add_config_argument(dest, required=True)
-            else:
-                self.add_config_argument(dest, default=default)
-        self._ignore_conflict_config_only = False
-
-    # remove config-only argument
-    def remove_config_only(self, arg):
-        deprecation("ArgumentParser.remove_config_only() is deprecated and will be removed in magiconfig 3.0.0; please switch to ArgumentParser.remove_config_argument().")
-
-        self.remove_config_argument(arg)
-
     def _get_config_only_kwargs(self, arg, **kwargs):
         return dict(kwargs, dest=arg, option_strings=[])
 
@@ -596,7 +566,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def _add_config_only_action(self, action):
         # check for existing dests
-        if action.dest in self._config_only and not self._ignore_conflict_config_only: raise argparse.ArgumentError(action, "conflicting config-only dest: {}".format(action.dest))
+        if action.dest in self._config_only: raise argparse.ArgumentError(action, "conflicting config-only dest: {}".format(action.dest))
         if action.dest in self._dests_actions: raise argparse.ArgumentError(action, "dest {} already specified as regular (not config-only) argument".format(action.dest))
 
         # add to actions list

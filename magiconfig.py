@@ -233,6 +233,21 @@ class _MutuallyExclusiveGroup(argparse._MutuallyExclusiveGroup):
         self._dests_actions[action.dest].append(action)
         return action
 
+# patch to remove artificial \0 character (added to enable display of default values for config-only arguments)
+def _get_help_string_clean(self, action):
+    if action.help=='\0': return ''
+    return action.help
+
+argparse.HelpFormatter._get_help_string = _get_help_string_clean
+
+_get_help_string_default_orig = argparse.ArgumentDefaultsHelpFormatter._get_help_string
+
+def _get_help_string_default_clean(self, action):
+    if action.help=='\0': action.help = ''
+    return _get_help_string_default_orig(self, action)
+
+argparse.ArgumentDefaultsHelpFormatter._get_help_string = _get_help_string_default_clean
+
 class ArgumentParser(argparse.ArgumentParser):
     # additional argument:
     # config_options: default is None, otherwise expects instance of MagiConfigOptions
@@ -546,8 +561,7 @@ class ArgumentParser(argparse.ArgumentParser):
         action = self._add_config_only_action(action)
         if action.help is None:
             if action.required: action.help = "(required)"
-            elif action.default is not None: action.help = " " # must be non-None string to activate default formatting
-            #else: action.help = " "
+            elif action.default is not None: action.help = "\0" # must be non-None, non-whitespace string to activate default formatting
 
         return action
 

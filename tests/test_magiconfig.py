@@ -459,7 +459,7 @@ class test_config_only_help(MagiConfigTest):
         parser.add_config_argument("arg1")
         parser.add_config_argument("arg2",required=True)
         parser.add_config_argument("arg3",default="test")
-        expected_help = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -C CONFIG, --config CONFIG\n                        name of config file to import (w/ object: config)\n                        (default: None)\n  -f FOO, --foo FOO     foo arg (default: lorem)\n  -b BAR, --bar BAR     bar arg (default: None)\n  -i, --ipsum           ipsum arg (default: False)\n\nconfig-only arguments:\n  arg1\n  arg2                  (required)\n  arg3                  (default: test)\n"
+        expected_help = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n\noptional arguments:\n  -h, --help            show this help message and exit\n  -C CONFIG, --config CONFIG\n                        name of config file to import (w/ object: config) (default: None)\n  -f FOO, --foo FOO     foo arg (default: lorem)\n  -b BAR, --bar BAR     bar arg (default: None)\n  -i, --ipsum           ipsum arg (default: False)\n\nconfig-only arguments:\n  arg1\n  arg2                  (required)\n  arg3                  (default: test)\n"
         actual_help = parser.format_help()
         return expected_help==actual_help
 

@@ -1,5 +1,4 @@
 from magiconfig import ArgumentParser, MagiConfigOptions
-import six
 
 if __name__=="__main__":
     # parser does not need config_options if it will have subparsers
@@ -19,6 +18,6 @@ if __name__=="__main__":
         )
     )
     parser_two.add_argument("-b","--bar", dest="bar", type=float, required=True, help="bar arg")
-    
+
     args = parser.parse_args()
-    six.print_(args)
+    print(args)

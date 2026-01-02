@@ -1,35 +1,12 @@
 import argparse
 import sys, os, imp, uuid
-import six
-import collections
-from six.moves.collections_abc import Sized, Iterable, Container, Mapping
+from collections import defaultdict, OrderedDict
+from collections.abc import Container, Mapping, Collection
 import functools
 import types
 import warnings
 
-__version__ = "2.4.4"
-
-# from https://github.com/python/cpython/blob/main/Lib/_collections_abc.py
-# missing from python < 3.6
-def _check_methods(C, *methods):
-    mro = C.__mro__
-    for method in methods:
-        for B in mro:
-            if method in B.__dict__:
-                if B.__dict__[method] is None:
-                    return NotImplemented
-                break
-        else:
-            return NotImplemented
-    return True
-
-class Collection(Sized, Iterable, Container):
-    __slots__ = ()
-    @classmethod
-    def __subclasshook__(cls, C):
-        if cls is Collection:
-            return _check_methods(C,  "__len__", "__iter__", "__contains__")
-        return NotImplemented
+__version__ = "3.0.0-alpha.0"
 
 # from numpy
 class VisibleDeprecationWarning(UserWarning):
@@ -72,7 +49,7 @@ class MagiConfig(argparse.Namespace):
         # create a magiconfig
         lines = [config_obj+" = MagiConfig()"]
         prepend = config_obj + "."
-        for attr,val in sorted(six.iteritems(vars(self))):
+        for attr,val in sorted(vars(self).items()):
             valclass = val.__class__
             # recurse for nested configs
             if valclass==self.__class__:
@@ -128,7 +105,7 @@ class MagiConfig(argparse.Namespace):
             # check collection entries
             coll = None
             if isinstance(val, Mapping):
-                coll = six.iteritems(val)
+                coll = val.items()
             elif isinstance(val, Collection):
                 coll = val
             elif isinstance(val, Container):
@@ -146,7 +123,7 @@ class MagiConfig(argparse.Namespace):
 
     # to merge with another config
     def join(self, other_config, prefer_other=False):
-        for attr,val in six.iteritems(vars(other_config)):
+        for attr,val in vars(other_config).items():
             if prefer_other or not hasattr(self,attr):
                 setattr(self,attr,val)
 
@@ -263,8 +240,8 @@ class ArgumentParser(argparse.ArgumentParser):
         self.config_options = kwargs.pop("config_options", None)
         self._config_only_help = kwargs.pop("config_only_help", True)
         # must be defined before base class constructor is called
-        self._dests_actions = collections.defaultdict(list)
-        self._config_only = collections.OrderedDict()
+        self._dests_actions = defaultdict(list)
+        self._config_only = OrderedDict()
         argparse.ArgumentParser.__init__(self, *args, **kwargs)
         self._config_actions = None
 
@@ -455,7 +432,7 @@ class ArgumentParser(argparse.ArgumentParser):
         # handle values in sub-configs by restoring dots in keys
         def flatten_vars(config,pre=""):
             flat_vars = {}
-            for attr,val in six.iteritems(vars(config)):
+            for attr,val in vars(config).items():
                 if isinstance(val,MagiConfig):
                     flat_vars.update(flatten_vars(val,attr+"."))
                 else:
@@ -467,7 +444,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._required = []
         flat_vars = flatten_vars(config)
         possible_required_actions = []
-        for attr,val in six.iteritems(flat_vars):
+        for attr,val in flat_vars.items():
             if attr in self._dests_actions or attr in self._config_only:
                 tmp = val
                 # check type if uniquely provided (and not None)
@@ -496,7 +473,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._required = self._suppress_required(possible_required_actions)
 
         # check missing required config-only args
-        config_only_missing = set([dest for dest,action in six.iteritems(self._config_only) if action.required]) - set([attr for attr in flat_vars])
+        config_only_missing = set([dest for dest,action in self._config_only.items() if action.required]) - set([attr for attr in flat_vars])
         if len(config_only_missing)>0:
             raise MagiConfigError("Imported config missing required attributes: "+','.join(sorted(list(config_only_missing))))
 
@@ -510,7 +487,7 @@ class ArgumentParser(argparse.ArgumentParser):
     def set_config_options(self, **kwargs):
         # modify config options
         if self.config_options is None: self.config_options = MagiConfigOptions()
-        for key,val in six.iteritems(kwargs):
+        for key,val in kwargs.items():
             if hasattr(self.config_options,key): setattr(self.config_options,key,val)
             else: raise MagiConfigError("Attempt to set invalid config option: "+key)
 
@@ -547,7 +524,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._ignore_conflict_config_only = True
         for dest in args:
             self.add_config_argument(dest)
-        for dest,default in six.iteritems(kwargs):
+        for dest,default in kwargs.items():
             if default is None:
                 self.add_config_argument(dest, required=True)
             else:
@@ -683,7 +660,7 @@ class ArgumentParser(argparse.ArgumentParser):
         if len(self._config_only)>0 and self._config_only_help:
             formatter.start_section("config-only arguments")
             # get list of (dummy) actions
-            config_only_actions = [action for dest,action in six.iteritems(self._config_only)]
+            config_only_actions = [action for dest,action in self._config_only.items()]
             formatter.add_arguments(config_only_actions)
             formatter.end_section()
 
@@ -692,23 +669,6 @@ class ArgumentParser(argparse.ArgumentParser):
 
         # determine help from format above
         return formatter.format_help()
-
-# updates to subparsers
-argparse._SubParsersAction.add_parser_orig = argparse._SubParsersAction.add_parser
-def add_parser_new(self, name, **kwargs):
-    if six.PY2:
-        # taken from python3 version
-        aliases = kwargs.pop('aliases', ())
-
-    parser = self.add_parser_orig(name,**kwargs)
-
-    if six.PY2:
-        # make parser available under aliases also
-        for alias in aliases:
-            self._name_parser_map[alias] = parser
-
-    return parser
-argparse._SubParsersAction.add_parser = add_parser_new
 
 # add all public classes and constants from argparse namespace to this namespace to be interchangeable
 # (from ConfigArgParse)

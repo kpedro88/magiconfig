@@ -1,5 +1,5 @@
 import platform
-from six.moves import urllib
+import urllib.request
 req = urllib.request.urlopen('https://github.com/python/cpython/raw/v'+platform.python_version()+'/Lib/test/test_argparse.py')
 with open('tests/test_argparse.py','b+w') as modfile:
 	modfile.write(req.read())

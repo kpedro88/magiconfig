@@ -15,19 +15,12 @@ setuptools.setup(
     url="https://github.com/kpedro88/magiconfig",
     py_modules=["magiconfig"],
     classifiers=[
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*',
+    python_requires='>=3.9',
     license="MIT",
     keywords="config, configuration, argparse, parameters, magiconfig",
-    install_requires=[
-        "six",
-    ],
     include_package_data=True,
 )

@@ -360,9 +360,9 @@ optional arguments:
 The script can be run with different inputs all contained in [examples/config4.py](./examples/config4.py):
 ```
 > python3 examples/example4.py -C examples/config4.py -O config.a
-MagiConfig(bar=3.0, foo='foo', input='a')
+MagiConfig(input='a', foo='foo', bar=3.0)
 > python3 examples/example4.py -C examples/config4.py -O config.b
-MagiConfig(bar=3.0, foo='foo', input='b')
+MagiConfig(input='b', foo='foo', bar=3.0)
 ```
 
 ## Inspirations

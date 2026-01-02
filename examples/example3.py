@@ -1,6 +1,5 @@
 from magiconfig import ArgumentParser, MagiConfigOptions, ArgumentDefaultsRawHelpFormatter
 from collections import OrderedDict
-import six
 
 if __name__=="__main__":
     # define schema of config parameters
@@ -9,7 +8,7 @@ if __name__=="__main__":
         "training": ["size","weights"],
         "hyper": ["learning_rate","loss"],
     }
-    config_schema_flat = OrderedDict([(key+"."+val, {}) for key,vals in six.iteritems(config_schema) for val in vals])
+    config_schema_flat = OrderedDict([(key+"."+val, {}) for key,vals in config_schema.items() for val in vals])
     # specify default value, required args
     config_schema_flat["dataset.path"] = {"default": "/data"}
     config_schema_flat["dataset.background"] = {"required": True}
@@ -23,8 +22,8 @@ if __name__=="__main__":
     )
     parser.add_argument("-v","--verbose", dest="verbose", action="store_true", help="enable verbose output")
     # include schema in parser
-    for arg,kwargs in six.iteritems(config_schema_flat):
+    for arg,kwargs in config_schema_flat.items():
         parser.add_config_argument(arg, **kwargs)
 
     args = parser.parse_args()
-    if args.verbose: six.print_(args)
+    if args.verbose: print(args)

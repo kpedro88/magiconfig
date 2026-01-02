@@ -1,6 +1,5 @@
 import magiconfig
 import argparse
-import six
 import sys
 import types
 from collections import OrderedDict
@@ -789,7 +788,7 @@ class test_config_write_read_OrderedDict_custom(MagiConfigTest):
         def reprOD(obj):
             import json
             lines = ["OrderedDict(["]
-            for key,val in six.iteritems(obj):
+            for key,val in obj.items():
                 lines.append('    ({}, {}),'.format(repr(key), json.dumps(val, sort_keys=True)))
             lines.append("])")
             return '\n'.join(lines)
@@ -831,15 +830,15 @@ if __name__=="__main__":
     successful = []
     failed = []
     incomplete = []
-    for test_name,test_class in six.iteritems(tests):
+    for test_name,test_class in tests.items():
         try:
             result = test_class().test()
             if result: successful.append(test_name)
             else: failed.append(test_name)
         except:
             incomplete.append(test_name)
-    six.print_("Successful tests: "+', '.join(successful))
-    six.print_("Failed tests: "+', '.join(failed))
-    six.print_("Incomplete tests: "+', '.join(incomplete))
+    print("Successful tests: "+', '.join(successful))
+    print("Failed tests: "+', '.join(failed))
+    print("Incomplete tests: "+', '.join(incomplete))
     if len(failed)>0 or len(incomplete)>0:
         sys.exit(1)

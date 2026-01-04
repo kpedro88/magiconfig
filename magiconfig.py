@@ -1,3 +1,7 @@
+"""An extension of argparse to configure Python with Python"""
+
+__version__ = "3.0.0-alpha.0"
+
 import argparse
 import sys, os, imp, uuid
 from collections import defaultdict, OrderedDict
@@ -5,8 +9,6 @@ from collections.abc import Container, Mapping, Collection
 import functools
 import types
 import warnings
-
-__version__ = "3.0.0-alpha.0"
 
 # from numpy
 class VisibleDeprecationWarning(UserWarning):

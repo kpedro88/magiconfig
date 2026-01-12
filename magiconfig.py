@@ -60,6 +60,12 @@ class MagiConfigError(Exception):
     pass
 
 class MagiConfig(argparse.Namespace):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._transients = [
+            "_transients",
+        ]
+
     def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
         if len(config_obj)==0:
             raise MagiConfigError("config_obj must be specified")
@@ -84,6 +90,8 @@ class MagiConfig(argparse.Namespace):
         lines = [config_obj+" = MagiConfig()"]
         prepend = config_obj + "."
         for attr,val in sorted(vars(self).items()):
+            if attr in self._transients:
+                continue
             valclass = val.__class__
             # recurse for nested configs
             if valclass==self.__class__:
@@ -160,6 +168,11 @@ class MagiConfig(argparse.Namespace):
         for attr,val in vars(other_config).items():
             if prefer_other or not hasattr(self,attr):
                 setattr(self,attr,val)
+                # propagate transient property accordingly
+                if attr in self._transients and not attr in other_config._transients:
+                    self._transients = [t for t in self._transients if t!=attr]
+                elif attr not in self._transients and attr in other_config._transients:
+                    self._transients.append(attr)
 
     def __setattr__(self, attr, val):
         pre, _, post = attr.rpartition('.')

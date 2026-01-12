@@ -3,7 +3,7 @@
 __version__ = "3.0.0-alpha.0"
 
 import argparse
-import sys, os, imp, uuid
+import sys, os
 from collections import defaultdict, OrderedDict
 from collections.abc import Container, Mapping, Collection
 import functools
@@ -22,6 +22,38 @@ def _rgetattr(obj, attr, *args):
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
     return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+# from https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
+# but more automated
+def import_config(file_path, attrs):
+    import importlib.util
+    import importlib.machinery
+
+    # uses md5 to be deterministic
+    def unique_name(file_path):
+        import hashlib
+        import base64
+
+        abs_path = os.path.abspath(file_path)
+        # use base64 for conciseness
+        path_hash = base64.b64encode(hashlib.md5(abs_path.encode('utf-8')).digest()).decode('utf-8')
+        base_name = os.path.basename(file_path).replace('.', '_')
+        module_name = f'{base_name}__{path_hash}'
+        return module_name
+
+    module_name = unique_name(file_path)
+    if module_name in sys.modules:
+        module = sys.modules[module_name]
+    else:
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
+    if isinstance(attrs,list):
+        return [_rgetattr(module, attr) for attr in attrs]
+    else:
+        return _rgetattr(module, attrs)
 
 # denotes MagiConfig-specific errors
 class MagiConfigError(Exception):
@@ -438,10 +470,7 @@ class ArgumentParser(argparse.ArgumentParser):
         namespace = self._check_namespace(namespace)
 
         # import config as module
-        # (from configurati)
-        module_id = str(uuid.uuid4())
-        module = imp.load_source(module_id, os.path.abspath(config_name))
-        config = _rgetattr(module,config_obj)
+        config = import_config(config_name, config_obj)
 
         # handle values in sub-configs by restoring dots in keys
         def flatten_vars(config,pre=""):

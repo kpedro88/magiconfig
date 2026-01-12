@@ -188,6 +188,56 @@ class MagiConfig(argparse.Namespace):
             return obj.__getattribute__(attr)
         return functools.reduce(_getattr, [self] + attr.split('.'))
 
+class ConfigObject:
+    arguments = {}
+    help = ""
+
+    # any keys in custom that are not in arguments will be ignored
+    @staticmethod
+    def add_arguments(parser, prefix=None, custom=None):
+        if prefix: prefix = prefix + "."
+        if not custom: custom = {}
+        for arg, kwargs in arguments.items():
+            if arg in custom:
+                if custom[arg] is None:
+                    continue
+                elif isinstance(custom[arg], bool):
+                    # bool value used to enable or disable, without changing other parameters
+                    kwargs.update(disable=not custom[arg])
+                else:
+                    kwargs.update(custom[arg])
+            parser.add_argument(f"--{prefix}{arg}", **kwargs)
+
+    # standalone function to build from config file
+    @classmethod
+    def build(cls, config_path, obj):
+        config = import_config(config_path, obj)
+        # todo: implement strict option
+        instance = cls(**vars(config))
+        return instance
+
+    def __init__(self, **kwargs):
+        self._fields = []
+        self._transients = []
+        for key, val in kwargs.items():
+            setattr(self, key, val)
+            self._fields.append(key)
+        # add default value at the end, in case MagiConfig used for construction provides some values
+        # _transients itself always included in _transients by MagiConfig
+        self._transients.extend([
+            "_fields",
+        ])
+
+    def __repr__(self):
+        return repr(MagiConfig(**{key:getattr(self,key) for key in self._fields}))
+
+# internal representation of config argument and associated arguments
+class MagiConfigOptions(ConfigObject):
+    arguments = dict(
+        obj = dict(type=str, default="config", disable=True, transient=True, help="name of object to import from config file"),
+        strict = dict(default=False, action="store_true", disable=True, transient=True, help="reject imported config with unknown attributes"),
+    )
+
 class MagiConfigOptions(object):
     # arguments:
     # args = arguments used to indicate config file

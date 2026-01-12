@@ -368,7 +368,7 @@ class ArgumentParser(argparse.ArgumentParser):
         if namespace is None: return MagiConfig()
         elif isinstance(namespace,MagiConfig): return namespace
         elif len(vars(namespace))==0: return MagiConfig()
-        else: return MagiConfig(vars(namespace))
+        else: return MagiConfig(**vars(namespace))
 
     def parse_known_args(self, args=None, namespace=None):
         if args is None: args = sys.argv[1:]

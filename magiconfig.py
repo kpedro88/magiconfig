@@ -10,6 +10,8 @@ import functools
 import types
 import warnings
 
+ASK = '==ASK=='
+
 # from numpy
 class VisibleDeprecationWarning(UserWarning):
     pass
@@ -189,31 +191,64 @@ class MagiConfig(argparse.Namespace):
         return functools.reduce(_getattr, [self] + attr.split('.'))
 
 class ConfigObject:
-    arguments = {}
-    help = ""
+    _base_arguments = dict(
+        obj = dict(type=str, default="config", disable=True, transient=True, help="name of object to import from config file"),
+        strict = dict(default=False, action="store_true", disable=True, transient=True, help="reject imported config with unknown attributes"),
+    )
+    _arguments = {}
+    _help = ""
+    _principal = None
+
+    # get combined arguments
+    @staticmethod
+    def arguments():
+        return _base_arguments | _arguments
 
     # any keys in custom that are not in arguments will be ignored
     @staticmethod
-    def add_arguments(parser, prefix=None, custom=None):
-        if prefix: prefix = prefix + "."
+    def add_arguments(config, prefix=True, custom=None):
         if not custom: custom = {}
-        for arg, kwargs in arguments.items():
+        parsers = {}
+        prefix = config + "." if prefix else ""
+
+        def add_argument(parser, arg, kwargs):
             if arg in custom:
-                if custom[arg] is None:
-                    continue
-                elif isinstance(custom[arg], bool):
+                if isinstance(custom[arg], bool):
                     # bool value used to enable or disable, without changing other parameters
                     kwargs.update(disable=not custom[arg])
                 else:
                     kwargs.update(custom[arg])
+            # maybe not necessary?
+            kwargs["source"] = config
             parser.add_argument(f"--{prefix}{arg}", **kwargs)
 
-    # standalone function to build from config file
+        parsers["base"] = ArgumentParser()
+        for arg, kwargs in _base_arguments.items():
+            add_argument(parsers["base"], arg, kwargs)
+
+        parsers["args"] = ArgumentParser()
+        for arg, kwargs in _arguments.items():
+            add_argument(parsers["args"], arg, kwargs)
+
+        return parsers
+
+    # standalone function to build from config or file
     @classmethod
-    def build(cls, config_path, obj):
-        config = import_config(config_path, obj)
-        # todo: implement strict option
-        instance = cls(**vars(config))
+    def build(cls, *, config=None, path=None, obj="config"):
+        if config and path:
+            raise RuntimeError("config and path are mutually exclusive")
+        if path:
+            config = import_config(path, obj)
+        # todo: implement strict option?
+        return _build_impl(cls, config)
+
+    # can be overridden in case you want to do something completely different from **vars(config)
+    @classmethod
+    def _build_impl(cls, config):
+        # in order to use ConfigObject as a proxy for an existing object
+        builder = _principal if _principal else cls
+        # todo: deal with repr in proxy case
+        instance = builder(**vars(config))
         return instance
 
     def __init__(self, **kwargs):
@@ -232,49 +267,11 @@ class ConfigObject:
         return repr(MagiConfig(**{key:getattr(self,key) for key in self._fields}))
 
 # internal representation of config argument and associated arguments
-class MagiConfigOptions(ConfigObject):
-    arguments = dict(
-        obj = dict(type=str, default="config", disable=True, transient=True, help="name of object to import from config file"),
-        strict = dict(default=False, action="store_true", disable=True, transient=True, help="reject imported config with unknown attributes"),
-    )
-
-class MagiConfigOptions(object):
-    # arguments:
-    # args = arguments used to indicate config file
-    # help = custom help message for config arg
-    # required = require config_arg to be provided when parsing
-    # default = default value for config filename
-    # dest = destination for config arg
-    # obj = string identifying magiconfig object in module imported from config file
-    # obj_args = optional argument to specify obj on command line
-    # obj_help = custom help message for obj arg
-    # obj_dest = destination for obj arg
-    # strict = reject imported config if it has unknown keys
-    # strict_args = optional argument to specify strictness on command line
-    # strict_help = custom help message for strict arg
-    # strict_dest = destination for strict arg
-    def __init__(
-        self,
-        args=["-C","--config"], help=None, required=False, default="", dest="config",
-        obj="config", obj_args=None, obj_help=None, obj_dest="obj",
-        strict=False, strict_args=None, strict_help=None, strict_dest="strict",
-    ):
-        if (obj is None or len(obj)==0) and obj_args is None:
-            raise MagiConfigError("obj or obj_args must be specified")
-
-        self.args = args
-        self.help = help
-        self.required = required
-        self.default = default
-        self.dest = dest
-        self.obj = obj
-        self.obj_args = obj_args
-        self.obj_help = obj_help
-        self.obj_dest = obj_dest
-        self.strict = strict
-        self.strict_args = strict_args
-        self.strict_help = strict_help
-        self.strict_dest = strict_dest
+class MagiConfigObject(ConfigObject):
+    _help = "name of config file to import"
+    @classmethod
+    def _build_impl(cls, config):
+        return config
 
 # patch base class to remove recursively through all groups (defined as standalone to be used on other objects)
 # this is needed to get correct help messages if set_config_options is called to make changes after initialization
@@ -346,102 +343,109 @@ def _get_help_string_default_clean(self, action):
 argparse.ArgumentDefaultsHelpFormatter._get_help_string = _get_help_string_default_clean
 
 class ArgumentParser(argparse.ArgumentParser):
-    # additional argument:
-    # config_options: default is None, otherwise expects instance of MagiConfigOptions
     def __init__(self, *args, **kwargs):
-        self.config_options = kwargs.pop("config_options", None)
-        self._config_only_help = kwargs.pop("config_only_help", True)
+        self._basic = kwargs.pop("basic", False)
         # must be defined before base class constructor is called
         self._dests_actions = defaultdict(list)
         self._config_only = OrderedDict()
-        argparse.ArgumentParser.__init__(self, *args, **kwargs)
-        self._config_actions = None
+        self._config_parsers = OrderedDict()
+        self._locked = False
+        self._transients = []
+        super().__init__(self, *args, **kwargs)
 
-        # initialize config args from options
-        self._init_config()
+        # initialize config arg in basic scenario
+        if self._basic:
+            self.add_argument("-C", "--config", config=True)
 
-    def _init_config(self):
-        # reset relevant members
-        if self._config_actions is not None:
-            for config_action in self._config_actions:
-                self._remove_action(config_action,throw=False)
-        self._dest = ""
-        self._obj_dest = ""
-        self._strict_dest = ""
-        self._config_actions = None
+    add_argument_orig = argparse.ArgumentParser.add_argument
 
-        # get dest w/ check for positionals
-        # based on argparse.add_argument() condition
-        # (args = None is not considered, because dest must be provided in that case)
-        def check_positional(args,default_dest,chars=self.prefix_chars):
-            if args is not None and len(args) == 1 and args[0][0] not in chars:
-                return args[0], True
+    def _find_source(self, source):
+        for key in self._config_parsers:
+            if key==source:
+                return self._config_parsers[key]["args"]
+            result = self._config_parsers[key]._find_source(source)
+            if result:
+                return result
+        return None
+
+    def add_argument(self, *args, **kwargs):
+        # check a few base args
+        type_arg = kwargs.get("type", None)
+        help_arg = kwargs.get("help", None)
+        default_arg = kwargs.get("default", None)
+
+        # pull out all custom kwargs
+        # inappropriate kwargs for a given case will just be ignored
+        source = kwargs.pop("source", "")
+        # default/basic case
+        # todo: what if someone wants non-basic config arg but still automatic source?
+        if not source and self._basic:
+            source = self._config_parsers.keys()[0]
+        # assign to source
+        if source:
+            # find source, even if nested
+            source_parser = self._find_source(source)
+            if source_parser:
+                return source_parser.add_argument(*args, **kwargs)
             else:
-                return default_dest, False
-        # set up config arg(s) if any
-        # dest is fixed because it is only used in internal namespace
-        if self.config_options is not None and self.config_options.args is not None and len(self.config_options.args)>0:
-            self._config_actions = []
-            # defaults
-            self._dest, _config_pos = check_positional(self.config_options.args,self.config_options.dest)
-            self._obj_dest, _obj_pos = check_positional(self.config_options.obj_args,self.config_options.obj_dest)
-            self._strict_dest, _strict_pos = check_positional(self.config_options.strict_args,self.config_options.strict_dest)
-            self._config_dests = [self._dest, self._obj_dest, self._strict_dest]
+                raise MagiConfigError(f"Could not find source {source}")
+        # if no source, just assigned to this parser
 
-            # exclude dest kwarg for positional
-            _config_kwargs = dict(
-                type=str,
-                help=self.config_options.help if self.config_options.help is not None else "name of config file to import (w/ object"+(": "+self.config_options.obj if self.config_options.obj_args is None else " from "+",".join(self.config_options.obj_args))+")",
-            )
-            if self.config_options.default is not None and len(self.config_options.default)>0:
-                _config_kwargs.update(
-                    default=self.config_options.default,
-                )
-            if not _config_pos:
-                _config_kwargs.update(
-                    dest=self._dest,
-                    required=self.config_options.required,
-                )
-            self._config_actions.append(self.add_argument(
-                *self.config_options.args,
-                **_config_kwargs
-            ))
+        config = kwargs.pop("config", False)
+        # convenience settings for base args (instead of using custom)
+        obj = kwargs.pop("obj", None)
+        strict = kwargs.pop("strict", None)
+        config_only_help = kwargs.pop("config_only_help", True)
+        if config:
+            type_arg = MagiConfigObject
 
-            if self.config_options.obj_args is not None:
-                _obj_kwargs = dict(
-                    type=str,
-                    help=self.config_options.obj_help if self.config_options.obj_help is not None else "name of object to import from config file",
-                )
-                _obj_required = self.config_options.obj is None or len(self.config_options.obj)==0
-                if not _obj_required:
-                    _obj_kwargs.update(
-                        default=self.config_options.obj,
-                    )
-                if not _obj_pos:
-                    _obj_kwargs.update(
-                        dest=self._obj_dest,
-                        required=_obj_required,
-                    )
-                self._config_actions.append(self.add_argument(
-                    *self.config_options.obj_args,
-                    **_obj_kwargs
-                ))
+        # for ConfigObjects
+        custom = kwargs.pop("custom", None)
+        prefix = kwargs.pop("prefix", True)
 
-            if self.config_options.strict_args is not None:
-                # strict arg switches from the default value
-                _strict_kwargs = dict(
-                    action="store_true" if self.config_options.strict==False else "store_false",
-                    help=self.config_options.strict_help if self.config_options.strict_help is not None else ("reject" if self.config_options.strict==False else "accept")+" imported config with unknown attributes",
-                    default=self.config_options.strict,
-                )
-                if not _strict_pos:
-                    _strict_kwargs.update(
-                        dest = self._strict_dest
-                    )
-                self._config_actions.append(self.add_argument(
-                    *self.config_options.strict_args,
-                    **_strict_kwargs
-                ))
+        # for individual args
+        disable = kwargs.pop("disable", False)
+        transient = kwargs.pop("transient", False)
+        config_only = kwargs.pop("config_only", False)
+
+        config_object = isinstance(type_arg, ConfigObject)
+        if config_object:
+            if not help_arg: kwargs["help"] = type_arg._help
+            parsers = {}
+
+            parsers["config"] = ArgumentParser()
+            # this is the actual argument that reads the name of the config file
+            config_arg = parsers["config"].add_argument_orig(*args, type=str, **kwargs)
+            config_dest = config_arg.dest
+
+            # todo: handle convenience settings
+            parsers.update(type_arg.add_arguments(config_dest, prefix=prefix, custom=custom))
+            self._config_parsers[config_dest] = parsers
+            # for ConfigObjects, lock parser_args to prevent extra args being added via source
+            if not config:
+                parsers["args"]._locked = True
+            parser.add_config_parsers(config_dest, parsers, parse_order=["base","config","args"], help_order=["config","base","args"])
+            return config_arg
+        else:
+            if self._locked:
+                raise MagiConfigError("Extra arguments cannot be added to ConfigObjects")
+
+            if disable:
+                dummy = ArgumentParser()
+                disabled_action = dummy.add_argument_orig(*args, **kwargs)
+                self._defaults[disabled_action.dest] = default_arg
+                return None
+
+            if config_only:
+                return self.add_config_argument(*args, **kwargs)
+
+            this_arg = self.add_argument_orig(*args, **kwargs)
+
+            # handle transient
+            if transient:
+                self._transients.append(this_arg.dest)
+
+            return this_arg
 
     parse_known_args_orig = argparse.ArgumentParser.parse_known_args
 
@@ -588,26 +592,6 @@ class ArgumentParser(argparse.ArgumentParser):
             raise MagiConfigError("Imported config contained unknown attributes: "+','.join(unknown_attrs))
 
         return namespace
-
-    # allow modifying options for config args
-    def set_config_options(self, **kwargs):
-        # modify config options
-        if self.config_options is None: self.config_options = MagiConfigOptions()
-        for key,val in kwargs.items():
-            if hasattr(self.config_options,key): setattr(self.config_options,key,val)
-            else: raise MagiConfigError("Attempt to set invalid config option: "+key)
-
-        # reinitialize
-        self._init_config()
-
-    # also allow copying existing set of options
-    def copy_config_options(self, config_options):
-        self.set_config_options(**vars(config_options))
-
-    # allow removing config options
-    def remove_config_options(self):
-        self.config_options = None
-        self._init_config()
 
     # write namespace into file using config_obj
     def write_config(self, namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):

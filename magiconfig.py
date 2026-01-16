@@ -206,10 +206,10 @@ class ConfigObject:
 
     # any keys in custom that are not in arguments will be ignored
     @staticmethod
-    def add_arguments(config, prefix=True, custom=None):
+    def add_arguments(cparser, config, custom=None):
         if not custom: custom = {}
         parsers = {}
-        prefix = config + "." if prefix else ""
+        prefix = config + "." if cparser.prefix else ""
 
         def add_argument(parser, arg, kwargs):
             if arg in custom:
@@ -222,13 +222,11 @@ class ConfigObject:
             kwargs["source"] = config
             parser.add_argument(f"--{prefix}{arg}", **kwargs)
 
-        parsers["base"] = ArgumentParser()
         for arg, kwargs in _base_arguments.items():
-            add_argument(parsers["base"], arg, kwargs)
+            add_argument(cparser.base, arg, kwargs)
 
-        parsers["args"] = ArgumentParser()
         for arg, kwargs in _arguments.items():
-            add_argument(parsers["args"], arg, kwargs)
+            add_argument(cparser.args, arg, kwargs)
 
         return parsers
 
@@ -342,22 +340,74 @@ def _get_help_string_default_clean(self, action):
 
 argparse.ArgumentDefaultsHelpFormatter._get_help_string = _get_help_string_default_clean
 
+# make sure namespace exists and is a MagiConfig
+def _check_namespace(namespace):
+    if namespace is None: return MagiConfig()
+    elif isinstance(namespace,MagiConfig): return namespace
+    elif len(vars(namespace))==0: return MagiConfig()
+    else: return MagiConfig(**vars(namespace))
+
+# hierarchical parsing for configs and ConfigObjects:
+# 1. base arguments (obj, strict)
+# 2. config itself
+# 3. individual arguments
+class ConfigParser:
+    def __init__(self, root, parent, prefix=True, standalone = False):
+        self.root = root
+        self.parent = parent
+        self.prefix = prefix
+        self.parsers = {
+            "base": ArgumentParser(add_help=False, wrapper=self) if not standalone else None,
+            "config": ArgumentParser(add_help=False, wrapper=self) if not standalone else None,
+            "args": ArgumentParser(add_help=False, wrapper=self),
+        }
+        self.standalone = standalone
+        self.transients = []
+
+    @property
+    def base(self):
+        return self.parsers["base"]
+    @property
+    def config(self):
+        return self.parsers["config"]
+    @property
+    def args(self):
+        return self.parsers["args"]
+
+    def lock(self, all=False):
+        for key, val in self.parsers.items():
+            if key=="args" and not all:
+                continue
+            val._locked = True
+
+    def parse_known_args(self, args=None, namespace=None):
+        remainder = args
+        if self.base:
+            base_args, remainder = self.base.parse_known_args(remainder, namespace)
+        if self.config:
+            config_args, remainder = self.config.parse_known_args(remainder, namespace)
+            # load the config using base_args info
+        if self.args:
+            other_args, remainder = self.args.parse_known_args(remainder, namespace)
+        return other_args, remainder
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self._basic = kwargs.pop("basic", False)
+        self._wrapper = kwargs.pop("wrapper", None)
         # must be defined before base class constructor is called
         self._dests_actions = defaultdict(list)
         self._config_only = OrderedDict()
         self._config_parsers = OrderedDict()
+        self._standalone_parser = ConfigParser(self, self, standalone=True) if not self._wrapper else None
+        self._default_source = None
         self._locked = False
-        self._transients = []
         super().__init__(self, *args, **kwargs)
 
         # initialize config arg in basic scenario
         if self._basic:
             self.add_argument("-C", "--config", config=True)
-
-    add_argument_orig = argparse.ArgumentParser.add_argument
+            self.set_default_source("config")
 
     def _find_source(self, source):
         for key in self._config_parsers:
@@ -367,6 +417,22 @@ class ArgumentParser(argparse.ArgumentParser):
             if result:
                 return result
         return None
+
+    def set_default_source(self, source):
+        if self._find_source(source):
+            self._default_source = source
+        else:
+            raise MagiConfigError(f"Unknown source {source}")
+
+    def clear_default_source(self):
+        self._default_source = None
+
+    add_argument_orig = argparse.ArgumentParser.add_argument
+
+    def add_argument_wrapped(self, *args, **kwargs):
+        action = self.add_argument_orig(*args, **kwargs)
+        action._wrapper = self._wrapper
+        return action
 
     def add_argument(self, *args, **kwargs):
         # check a few base args
@@ -378,9 +444,8 @@ class ArgumentParser(argparse.ArgumentParser):
         # inappropriate kwargs for a given case will just be ignored
         source = kwargs.pop("source", "")
         # default/basic case
-        # todo: what if someone wants non-basic config arg but still automatic source?
-        if not source and self._basic:
-            source = self._config_parsers.keys()[0]
+        if not source and self._default_source:
+            source = self._default_source
         # assign to source
         if source:
             # find source, even if nested
@@ -389,7 +454,7 @@ class ArgumentParser(argparse.ArgumentParser):
                 return source_parser.add_argument(*args, **kwargs)
             else:
                 raise MagiConfigError(f"Could not find source {source}")
-        # if no source, just assigned to this parser
+        # if no source, assign to standalone parser
 
         config = kwargs.pop("config", False)
         # convenience settings for base args (instead of using custom)
@@ -408,27 +473,34 @@ class ArgumentParser(argparse.ArgumentParser):
         transient = kwargs.pop("transient", False)
         config_only = kwargs.pop("config_only", False)
 
+        # check for incompatible combinations
+        if config_only and not self._wrapper:
+            raise MagiConfigError("Cannot add config_only argument to top-level parser; please assign a source")
+
         config_object = isinstance(type_arg, ConfigObject)
         if config_object:
             if not help_arg: kwargs["help"] = type_arg._help
-            parsers = {}
+            cparser = ConfigParser(
+                root = self._wrapper.root if self._wrapper else self,
+                parent = self,
+                prefix = prefix,
+            )
 
-            parsers["config"] = ArgumentParser()
             # this is the actual argument that reads the name of the config file
-            config_arg = parsers["config"].add_argument_orig(*args, type=str, **kwargs)
+            config_arg = cparser.config.add_argument_wrapped(*args, type=str, **kwargs)
             config_dest = config_arg.dest
 
             # todo: handle convenience settings
-            parsers.update(type_arg.add_arguments(config_dest, prefix=prefix, custom=custom))
-            self._config_parsers[config_dest] = parsers
-            # for ConfigObjects, lock parser_args to prevent extra args being added via source
-            if not config:
-                parsers["args"]._locked = True
-            parser.add_config_parsers(config_dest, parsers, parse_order=["base","config","args"], help_order=["config","base","args"])
+            type_arg.add_arguments(cparser, config_dest, custom=custom)
+            self._config_parsers[config_dest] = cparser
+
+            # for ConfigObjects, lock all to prevent extra args being added via source
+            cparser.lock(all=not config)
+
             return config_arg
         else:
             if self._locked:
-                raise MagiConfigError("Extra arguments cannot be added to ConfigObjects")
+                raise MagiConfigError("This parser is locked, so extra arguments cannot be added")
 
             if disable:
                 dummy = ArgumentParser()
@@ -439,11 +511,14 @@ class ArgumentParser(argparse.ArgumentParser):
             if config_only:
                 return self.add_config_argument(*args, **kwargs)
 
-            this_arg = self.add_argument_orig(*args, **kwargs)
+            if self._wrapper:
+                this_arg = self.add_argument_wrapped(*args, **kwargs)
+            else:
+                this_arg = self._standalone_parser.add_argument_wrapped(*args, **kwargs)
 
-            # handle transient
-            if transient:
-                self._transients.append(this_arg.dest)
+            # handle transient (just ignore for non-wrapped parsers)
+            if transient and self._wrapper:
+                self._wrapper.transients.append(this_arg.dest)
 
             return this_arg
 
@@ -462,13 +537,6 @@ class ArgumentParser(argparse.ArgumentParser):
         for action in actions:
             action.required = True
 
-    # make sure it exists and is a MagiConfig
-    def _check_namespace(self, namespace):
-        if namespace is None: return MagiConfig()
-        elif isinstance(namespace,MagiConfig): return namespace
-        elif len(vars(namespace))==0: return MagiConfig()
-        else: return MagiConfig(**vars(namespace))
-
     def parse_known_args(self, args=None, namespace=None):
         if args is None: args = sys.argv[1:]
         else: args = list(args)
@@ -482,7 +550,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
         # get correct namespace type
         if self._config_actions is not None or check_subparser_config_actions():
-            namespace = self._check_namespace(namespace)
+            namespace = _check_namespace(namespace)
 
         # fall back to default argparse behavior
         if self._config_actions is None:
@@ -534,7 +602,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def parse_config(self, config_name, config_obj, config_strict, namespace=None):
         # in case used standalone
-        namespace = self._check_namespace(namespace)
+        namespace = _check_namespace(namespace)
 
         # import config as module
         config = import_config(config_name, config_obj)

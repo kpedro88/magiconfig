@@ -68,6 +68,9 @@ class MagiConfig(argparse.Namespace):
             "_transients",
         ]
 
+    def vars(self, transient=False):
+        return {k:v for k,v in self.__dict__ if transient or k not in self._transients}
+
     def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
         if len(config_obj)==0:
             raise MagiConfigError("config_obj must be specified")
@@ -91,7 +94,7 @@ class MagiConfig(argparse.Namespace):
         # create a magiconfig
         lines = [config_obj+" = MagiConfig()"]
         prepend = config_obj + "."
-        for attr,val in sorted(vars(self).items()):
+        for attr,val in sorted(self.vars().items()):
             if attr in self._transients:
                 continue
             valclass = val.__class__
@@ -167,7 +170,7 @@ class MagiConfig(argparse.Namespace):
 
     # to merge with another config
     def join(self, other_config, prefer_other=False):
-        for attr,val in vars(other_config).items():
+        for attr,val in other_config.vars().items():
             if prefer_other or not hasattr(self,attr):
                 setattr(self,attr,val)
                 # propagate transient property accordingly
@@ -213,13 +216,15 @@ class ConfigObject:
 
         def add_argument(parser, arg, kwargs):
             if arg in custom:
-                if isinstance(custom[arg], bool):
-                    # bool value used to enable or disable, without changing other parameters
-                    kwargs.update(disable=not custom[arg])
-                else:
-                    kwargs.update(custom[arg])
-            # maybe not necessary?
-            kwargs["source"] = config
+                # check for forbidden changes
+                forbidden_keys = ["dest"]
+                for key in forbidden_keys:
+                    if key in custom[arg]:
+                        custom[arg].pop(key)
+                        warnings.warn(f"Modification of {key} is not allowed; discarding this customization for {arg}")
+                kwargs.update(custom[arg])
+            else:
+                warnings.warn(f"Additional arguments cannot be added to ConfigObjects; ignoring {arg}")
             parser.add_argument(f"--{prefix}{arg}", **kwargs)
 
         for arg, kwargs in _base_arguments.items():
@@ -240,13 +245,16 @@ class ConfigObject:
         # todo: implement strict option?
         return _build_impl(cls, config)
 
-    # can be overridden in case you want to do something completely different from **vars(config)
+    # can be overridden in case you want to do something completely different from **config.vars()
     @classmethod
     def _build_impl(cls, config):
         # in order to use ConfigObject as a proxy for an existing object
         builder = _principal if _principal else cls
+        # omit unknown keys
+        # todo: emit warning with list of omitted keys?
+        config_vars = {k:v for k,v in config.vars().items() if k in cls.arguments()}
         # todo: deal with repr in proxy case
-        instance = builder(**vars(config))
+        instance = builder(**config_vars)
         return instance
 
     def __init__(self, **kwargs):
@@ -389,6 +397,10 @@ class ConfigParser:
             # load the config using base_args info
         if self.args:
             other_args, remainder = self.args.parse_known_args(remainder, namespace)
+
+        other_args.join(base_args)
+        other_args.join(config_args)
+        other_args._transients.extend(self.transients)
         return other_args, remainder
 
 class ArgumentParser(argparse.ArgumentParser):
@@ -430,8 +442,17 @@ class ArgumentParser(argparse.ArgumentParser):
     add_argument_orig = argparse.ArgumentParser.add_argument
 
     def add_argument_wrapped(self, *args, **kwargs):
+        transient = kwargs.pop(transient, None)
         action = self.add_argument_orig(*args, **kwargs)
-        action._wrapper = self._wrapper
+        if self._wrapper:
+            action._wrapper = self._wrapper
+        # handle transient (ignore for non-wrapped parsers)
+        if transient:
+            if self._wrapper:
+                self._wrapper.transients.append(this_arg.dest)
+            else:
+                warnings.warn(f"transient ignored for argument {args} not attached to a config", RuntimeWarning)
+
         return action
 
     def add_argument(self, *args, **kwargs):
@@ -461,23 +482,29 @@ class ArgumentParser(argparse.ArgumentParser):
         obj = kwargs.pop("obj", None)
         strict = kwargs.pop("strict", None)
         config_only_help = kwargs.pop("config_only_help", True)
+        transient_default = False
         if config:
             type_arg = MagiConfigObject
 
+        config_object = isinstance(type_arg, ConfigObject)
+        if config_object:
+            transient_default = True
+        transient = kwargs.get("transient", None)
+        if transient is None:
+            kwargs[transient] = transient_default
+
         # for ConfigObjects
-        custom = kwargs.pop("custom", None)
+        custom = kwargs.pop("custom", {})
         prefix = kwargs.pop("prefix", True)
 
         # for individual args
         disable = kwargs.pop("disable", False)
-        transient = kwargs.pop("transient", False)
         config_only = kwargs.pop("config_only", False)
 
         # check for incompatible combinations
         if config_only and not self._wrapper:
             raise MagiConfigError("Cannot add config_only argument to top-level parser; please assign a source")
 
-        config_object = isinstance(type_arg, ConfigObject)
         if config_object:
             if not help_arg: kwargs["help"] = type_arg._help
             cparser = ConfigParser(
@@ -490,7 +517,20 @@ class ArgumentParser(argparse.ArgumentParser):
             config_arg = cparser.config.add_argument_wrapped(*args, type=str, **kwargs)
             config_dest = config_arg.dest
 
-            # todo: handle convenience settings
+            # handle convenience settings
+            def update_custom(custom, key, val):
+                if val is not None:
+                    if not key in custom:
+                        custom[key] = {}
+                    if val==ASK:
+                        custom[key]["disable"] = False
+                    else:
+                        custom[key]["default"] = val
+                return custom
+            custom = update_custom(custom, "obj", obj)
+            custom = update_custom(custom, "strict", strict)
+
+            # add config(object) to parser
             type_arg.add_arguments(cparser, config_dest, custom=custom)
             self._config_parsers[config_dest] = cparser
 
@@ -515,10 +555,6 @@ class ArgumentParser(argparse.ArgumentParser):
                 this_arg = self.add_argument_wrapped(*args, **kwargs)
             else:
                 this_arg = self._standalone_parser.add_argument_wrapped(*args, **kwargs)
-
-            # handle transient (just ignore for non-wrapped parsers)
-            if transient and self._wrapper:
-                self._wrapper.transients.append(this_arg.dest)
 
             return this_arg
 
@@ -610,7 +646,7 @@ class ArgumentParser(argparse.ArgumentParser):
         # handle values in sub-configs by restoring dots in keys
         def flatten_vars(config,pre=""):
             flat_vars = {}
-            for attr,val in vars(config).items():
+            for attr,val in config.vars().items():
                 if isinstance(val,MagiConfig):
                     flat_vars.update(flatten_vars(val,attr+"."))
                 else:

@@ -758,9 +758,21 @@ class ArgumentParser(argparse.ArgumentParser):
         self._mutually_exclusive_groups.append(group)
         return group
 
-    # changes to _add_action are now made in the Group classes
+    # other changes to _add_action are now made in the Group classes
+    _add_action_container = argparse._ActionsContainer._add_action
+    _add_action_orig = argparse.ArgumentParser._add_action
+    def _add_action(self, action):
+        if self._wrapper:
+            # all actions are added to top-level parser to keep track of conflicts
+            self._wrapper.root._add_action_container(action)
+        # called after top-level, so action.container is set to actual parser
+        action = self._add_action_orig(action)
+        return action
 
     def _add_config_only_action(self, action):
+        if self._wrapper:
+            self._wrapper.root._add_config_only_action(action)
+
         # check for existing dests
         if action.dest in self._config_only: raise argparse.ArgumentError(action, "conflicting config-only dest: {}".format(action.dest))
         if action.dest in self._dests_actions: raise argparse.ArgumentError(action, "dest {} already specified as regular (not config-only) argument".format(action.dest))
@@ -783,11 +795,17 @@ class ArgumentParser(argparse.ArgumentParser):
     # for optional arguments: if keep is true, just removes the single specified arg; otherwise, removes entire action
     # for positional arguments, arg=dest, and all positional actions w/ that dest are removed
     def remove_argument(self, arg, keep=False):
-        # check per arg whether positional or optional
+        # check per arg whether config-only, positional, or optional
         found = False
-        if arg[0] in self.prefix_chars:
+        container = None
+        if arg in self._config_only:
+            container = arg.container
+            self._config_only.pop(arg)
+            found = True
+        elif arg[0] in self.prefix_chars:
             # optional, check option strings
             if arg in self._option_string_actions:
+                container = arg.container
                 action = self._option_string_actions.pop(arg)
                 action.option_strings.remove(arg)
                 if not keep or len(action.option_strings)==0:
@@ -796,6 +814,7 @@ class ArgumentParser(argparse.ArgumentParser):
         else:
             # positional, check dests
             if arg in self._dests_actions:
+                container = arg.container
                 for action in self._dests_actions[arg]:
                     # remove only positional
                     if len(action.option_strings)==0:
@@ -803,6 +822,8 @@ class ArgumentParser(argparse.ArgumentParser):
                 found = True
         if not found:
             self.error("attempt to remove unrecognized argument: {}".format(arg))
+        if container is not self:
+            container.remove_argument(arg, keep=keep)
 
     # modified to include config-only args
     def format_help(self):

@@ -209,10 +209,10 @@ class ConfigObject:
 
     # any keys in custom that are not in arguments will be ignored
     @staticmethod
-    def add_arguments(cparser, config, custom=None):
+    def add_arguments(cparser, custom=None):
         if not custom: custom = {}
         parsers = {}
-        prefix = config + "." if cparser.prefix else ""
+        prefix = cparser.config_dest + "." if cparser.prefix else ""
 
         def add_argument(parser, arg, kwargs):
             if arg in custom:
@@ -369,6 +369,7 @@ class ConfigParser:
             "config": ArgumentParser(add_help=False, wrapper=self) if not standalone else None,
             "args": ArgumentParser(add_help=False, wrapper=self),
         }
+        self.config_dest = None
         self.standalone = standalone
         self.transients = []
 
@@ -389,19 +390,25 @@ class ConfigParser:
             val._locked = True
 
     def parse_known_args(self, args=None, namespace=None):
-        remainder = args
         if self.base:
-            base_args, remainder = self.base.parse_known_args(remainder, namespace)
+            base_args, args = self.base.parse_known_args(args, namespace)
         if self.config:
-            config_args, remainder = self.config.parse_known_args(remainder, namespace)
+            config_args, args = self.config.parse_known_args(args, namespace)
             # load the config using base_args info
-        if self.args:
-            other_args, remainder = self.args.parse_known_args(remainder, namespace)
+            self.args.parse_config(
+                getattr(config_args, self.config_dest),
+                base_args.obj,
+                base_args.strict,
+                namespace=namespace
+            )
+        # "args" parser should always exist
+        other_args, args = self.args.parse_known_args(args, namespace)
 
-        other_args.join(base_args)
-        other_args.join(config_args)
+        # base_args and config_args are discarded
+        # (they never correspond to dests in final output config, because those values cannot be read back from the output config by a parser;
+        # that would be a logical inconsistency, since those values are needed before loading the config)
         other_args._transients.extend(self.transients)
-        return other_args, remainder
+        return other_args, args
 
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
@@ -515,7 +522,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
             # this is the actual argument that reads the name of the config file
             config_arg = cparser.config.add_argument_wrapped(*args, type=str, **kwargs)
-            config_dest = config_arg.dest
+            cparser.config_dest = config_arg.dest
 
             # handle convenience settings
             def update_custom(custom, key, val):
@@ -531,8 +538,8 @@ class ArgumentParser(argparse.ArgumentParser):
             custom = update_custom(custom, "strict", strict)
 
             # add config(object) to parser
-            type_arg.add_arguments(cparser, config_dest, custom=custom)
-            self._config_parsers[config_dest] = cparser
+            type_arg.add_arguments(cparser, custom=custom)
+            self._config_parsers[cparser.config_dest] = cparser
 
             # for ConfigObjects, lock all to prevent extra args being added via source
             cparser.lock(all=not config)
@@ -577,64 +584,57 @@ class ArgumentParser(argparse.ArgumentParser):
         if args is None: args = sys.argv[1:]
         else: args = list(args)
 
-        def check_subparser_config_actions():
+        # namespace returned by a parser should be MagiConfig if it has config parsers and does not have any standalone actions
+        # (wrapped parsers always return MagiConfigs; other checks are only for top-level parser)
+        def has_configs(parser):
+            return len(parser._config_parsers)>0
+        def has_standalone(parser):
+            return parser._standalone_parser is not None and len(parser._standalone_parser._actions)>0
+        def has_only_configs(parser):
+            return has_configs(parser) and not has_standalone(parser)
+
+        def check_subparser_configs():
             if self._subparsers is None:
                 return False
             subparser_objects = next((action.choices.values() for action in self._subparsers._actions if isinstance(action,argparse._SubParsersAction)),[])
-            # if any subparsers have config_actions, then return a MagiConfig
-            return any(parser._config_actions is not None for parser in subparser_objects)
+            # if any subparsers have config parsers, then return a MagiConfig
+            return any(has_only_configs(parser) for parser in subparser_objects)
 
-        # get correct namespace type
-        if self._config_actions is not None or check_subparser_config_actions():
+        top_level = not self._wrapper
+        if top_level:
+            top_level_has_only_configs = has_only_configs(self) or check_subparser_configs()
+
+            if top_level_has_only_configs:
+                # get correct namespace type
+                namespace = _check_namespace(namespace)
+            else:
+                # fall back to default argparse behavior
+                return self.parse_known_args_orig(args=args, namespace=namespace)
+
+            # parse standalone first
+            if has_standalone(self):
+                namespace, args = self._standalone_parser.parse_known_args(args=args, namespace=namespace)
+
+            # then start parsing config sections
+            if has_configs(self):
+                for cname, cparser in self._config_parsers.items():
+                    namespace, args = cparser.parse_known_args(args=args, namespace=namespace)
+
+            return namespace, args
+        else:
+            # get correct namespace type
             namespace = _check_namespace(namespace)
 
-        # fall back to default argparse behavior
-        if self._config_actions is None:
-            return self.parse_known_args_orig(args=args,namespace=namespace)
-
-        # create a subordinate instance with just the config options
-        config_only_parser = ArgumentParser(
-            config_options = self.config_options,
-            add_help = False,
-        )
-        # prevent exit on error() (from ConfigArgParse)
-        def error_method(self, message):
-            raise argparse.ArgumentError(None, message)
-        config_only_parser.error = types.MethodType(error_method, config_only_parser)
-        # subordinate parser is not allowed to throw or exit
-        # if a required arg is missing, it will be checked later
-        try:
-            tmpspace, _ = config_only_parser.parse_known_args_orig(args=args)
-        except:
-            tmpspace = None
-
-        # fall back to default argparse behavior
-        # this will check config_required (config args still included with rest of args)
-        if tmpspace is None or getattr(tmpspace,self._dest,None) is None:
-            tmpspace, remaining_args = self.parse_known_args_orig(args=args,namespace=namespace)
-        else:
-            # get namespace as filled by config
-            namespace = self.parse_config(
-                getattr(tmpspace,self._dest),
-                getattr(tmpspace,self._obj_dest,self.config_options.obj),
-                getattr(tmpspace,self._strict_dest,self.config_options.strict),
-                namespace=namespace
-            )
-
-            # call parse_known_args_orig again, with all args (supplying namespace from above)
-            tmpspace, remaining_args = self.parse_known_args_orig(args=args,namespace=namespace)
+            # all the other orchestration is handled by ConfigParser and other internal functions of this class
+            # here, just go back to regular parsing
+            namespace, args = self.parse_known_args_orig(args=args, namespace=namespace)
 
             # restore required actions
             self._restore_required(self._required)
             # in case this runs again
             self._required = []
 
-        # remove config option dests from namespace
-        for dest in self._config_dests:
-            if hasattr(tmpspace,dest): delattr(tmpspace,dest)
-
-        # finish
-        return tmpspace, remaining_args
+            return namespace, args
 
     def parse_config(self, config_name, config_obj, config_strict, namespace=None):
         # in case used standalone

@@ -207,34 +207,6 @@ class ConfigObject:
     def arguments():
         return _base_arguments | _arguments
 
-    # any keys in custom that are not in arguments will be ignored
-    @staticmethod
-    def add_arguments(cparser, custom=None):
-        if not custom: custom = {}
-        parsers = {}
-        prefix = cparser.config_dest + "." if cparser.prefix else ""
-
-        def add_argument(parser, arg, kwargs):
-            if arg in custom:
-                # check for forbidden changes
-                forbidden_keys = ["dest"]
-                for key in forbidden_keys:
-                    if key in custom[arg]:
-                        custom[arg].pop(key)
-                        warnings.warn(f"Modification of {key} is not allowed; discarding this customization for {arg}")
-                kwargs.update(custom[arg])
-            else:
-                warnings.warn(f"Additional arguments cannot be added to ConfigObjects; ignoring {arg}")
-            parser.add_argument(f"--{prefix}{arg}", **kwargs)
-
-        for arg, kwargs in _base_arguments.items():
-            add_argument(cparser.base, arg, kwargs)
-
-        for arg, kwargs in _arguments.items():
-            add_argument(cparser.args, arg, kwargs)
-
-        return parsers
-
     # standalone function to build from config or file
     @classmethod
     def build(cls, *, config=None, path=None, obj="config"):
@@ -389,6 +361,33 @@ class ConfigParser:
                 continue
             val._locked = True
 
+    def add_arguments(self, ctype, config_params, custom=None):
+        if not custom: custom = {}
+
+        # this is the actual argument that reads the name of the config file
+        config_arg = self.config.add_argument_wrapped(*args, type=str, **kwargs)
+        self.config_dest = config_arg.dest
+        prefix = self.config_dest + "." if self.prefix else ""
+
+        def add_argument(parser, arg, kwargs):
+            forbidden_keys = ["dest"]
+            if arg in custom:
+                # check for forbidden changes
+                for key in forbidden_keys:
+                    if key in custom[arg]:
+                        custom[arg].pop(key)
+                        warnings.warn(f"ConfigObject {ctype.__name__}: modification of {key} is not allowed; discarding this customization for {arg}")
+                kwargs.update(custom[arg])
+            else:
+                warnings.warn(f"ConfigObject {ctype.__name__}: additional arguments cannot be added to ConfigObjects; ignoring {arg}")
+            parser.add_argument(f"--{prefix}{arg}", **kwargs)
+
+        for arg, kwargs in ctype._base_arguments.items():
+            add_argument(self.base, arg, kwargs)
+
+        for arg, kwargs in ctype._arguments.items():
+            add_argument(self.args, arg, kwargs)
+
     def parse_known_args(self, args=None, namespace=None):
         if self.base:
             base_args, args = self.base.parse_known_args(args, namespace)
@@ -520,9 +519,8 @@ class ArgumentParser(argparse.ArgumentParser):
                 prefix = prefix,
             )
 
-            # this is the actual argument that reads the name of the config file
-            config_arg = cparser.config.add_argument_wrapped(*args, type=str, **kwargs)
-            cparser.config_dest = config_arg.dest
+            # for the actual argument that reads the name of the config file
+            config_params = {"args": args, "kwargs": kwargs}
 
             # handle convenience settings
             def update_custom(custom, key, val):
@@ -538,7 +536,7 @@ class ArgumentParser(argparse.ArgumentParser):
             custom = update_custom(custom, "strict", strict)
 
             # add config(object) to parser
-            type_arg.add_arguments(cparser, custom=custom)
+            cparser.add_arguments(type_arg, config_params, custom=custom)
             self._config_parsers[cparser.config_dest] = cparser
 
             # for ConfigObjects, lock all to prevent extra args being added via source

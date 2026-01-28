@@ -1,6 +1,6 @@
 """An extension of argparse to configure Python with Python"""
 
-__version__ = "3.0.0-alpha.0"
+__version__ = "3.0.0-alpha.1"
 
 import argparse
 import sys, os

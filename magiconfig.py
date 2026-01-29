@@ -11,6 +11,7 @@ import types
 import warnings
 
 ASK = '==ASK=='
+CONFIG_DEFAULT_HELP = "name of config file to import"
 
 # from numpy
 class VisibleDeprecationWarning(UserWarning):
@@ -199,7 +200,7 @@ class ConfigObject:
         strict = dict(default=False, action="store_true", disable=True, transient=True, help="reject imported config with unknown attributes"),
     )
     _arguments = {}
-    _help = ""
+    _description = ""
     _principal = None
 
     # get combined arguments
@@ -246,7 +247,6 @@ class ConfigObject:
 
 # internal representation of config argument and associated arguments
 class MagiConfigObject(ConfigObject):
-    _help = "name of config file to import"
     @classmethod
     def _build_impl(cls, config):
         return config
@@ -332,7 +332,7 @@ def _check_namespace(namespace):
 # 2. config itself
 # 3. individual arguments
 class ConfigParser:
-    def __init__(self, ctype, root, parent, prefix=True, standalone = False):
+    def __init__(self, ctype, root, parent, prefix=True, standalone=False, config_only_help=False):
         self.root = root
         self.parent = parent
         self.prefix = prefix
@@ -344,6 +344,7 @@ class ConfigParser:
         self.config_type = ctype
         self.config_dest = None
         self.standalone = standalone
+        self.config_only_help = config_only_help
         self.transients = []
 
     @property
@@ -421,6 +422,42 @@ class ConfigParser:
             instance = self.config_type.build(other_args)
             return instance, args
 
+    def format_help(self, formatter):
+        if self.standalone:
+            # positionals, optionals and user-defined groups
+            for action_group in self.args._action_groups:
+                formatter.start_section(action_group.title)
+                formatter.add_text(action_group.description)
+                formatter.add_arguments(action_group._group_actions)
+                formatter.end_section()
+        else:
+            # collect actions in order: config, base, args
+            help_actions = []
+            for parser in [self.config, self.base, self.args]:
+                if parser:
+                    help_actions.extend(parser._actions)
+
+            # todo: allow overriding title and desc
+            formatter.start_section(config_dest)
+            formatter.add_text(config_type._description)
+            formatter.add_arguments(help_actions)
+
+            # recurse into nested parsers *before* ending section: adds extra indentation
+            for parser in self.args._config_parsers:
+                formatter = parser.format_help(formatter)
+
+            # config-only args
+            if len(self.args._config_only)>0 and self.config_only_help:
+                formatter.start_section("config-only arguments")
+                # get list of (dummy) actions
+                config_only_actions = [action for dest,action in self._config_only.items()]
+                formatter.add_arguments(config_only_actions)
+                formatter.end_section()
+
+            formatter.end_section()
+
+        return formatter
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self._basic = kwargs.pop("basic", False)
@@ -433,11 +470,14 @@ class ArgumentParser(argparse.ArgumentParser):
         self._default_source = None
         self._locked = False
         self._required = []
+        # temporary workaround
+        usage = kwargs.get("usage", None)
+        if not usage: kwargs["usage"] = "[options]"
         super().__init__(self, *args, **kwargs)
 
         # initialize config arg in basic scenario
         if self._basic:
-            self.add_argument("-C", "--config", config=True)
+            self.add_argument("-C", "--config", config=True, help=CONFIG_DEFAULT_HELP)
             self.set_default_source("config")
 
     def _find_source(self, source):
@@ -497,6 +537,9 @@ class ArgumentParser(argparse.ArgumentParser):
         # if no source, assign to standalone parser
 
         config = kwargs.pop("config", False)
+        # this default can be overridden as help=""
+        if config and help_arg is None:
+            kwargs["help"] = CONFIG_DEFAULT_HELP
         # convenience settings for base args (instead of using custom)
         obj = kwargs.pop("obj", None)
         strict = kwargs.pop("strict", None)
@@ -531,6 +574,7 @@ class ArgumentParser(argparse.ArgumentParser):
                 root = self._wrapper.root if self._wrapper else self,
                 parent = self,
                 prefix = prefix,
+                config_only_help = config_only_help,
             )
 
             # for the actual argument that reads the name of the config file
@@ -836,8 +880,9 @@ class ArgumentParser(argparse.ArgumentParser):
             container.remove_argument(arg, keep=keep)
 
     # modified to include config-only args
-    def format_help(self):
-        formatter = self._get_formatter()
+    def format_help(self, formatter=None):
+        if formatter is None:
+            formatter = self._get_formatter()
 
         # usage
         formatter.add_usage(self.usage, self._actions,
@@ -846,20 +891,10 @@ class ArgumentParser(argparse.ArgumentParser):
         # description
         formatter.add_text(self.description)
 
-        # positionals, optionals and user-defined groups
-        for action_group in self._action_groups:
-            formatter.start_section(action_group.title)
-            formatter.add_text(action_group.description)
-            formatter.add_arguments(action_group._group_actions)
-            formatter.end_section()
-
-        # config-only args
-        if len(self._config_only)>0 and self._config_only_help:
-            formatter.start_section("config-only arguments")
-            # get list of (dummy) actions
-            config_only_actions = [action for dest,action in self._config_only.items()]
-            formatter.add_arguments(config_only_actions)
-            formatter.end_section()
+        # loop over parsers
+        for parser in [self._standalone_parser]+self._config_parsers:
+            if not parser: continue
+            formatter = parser.format_help(formatter)
 
         # epilog
         formatter.add_text(self.epilog)

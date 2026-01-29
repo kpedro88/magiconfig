@@ -337,9 +337,9 @@ class ConfigParser:
         self.parent = parent
         self.prefix = prefix
         self.parsers = {
-            "base": ArgumentParser(add_help=False, wrapper=self) if not standalone else None,
-            "config": ArgumentParser(add_help=False, wrapper=self) if not standalone else None,
-            "args": ArgumentParser(add_help=False, wrapper=self),
+            "base": ArgumentParser(add_help=False, prog='', wrapper=self) if not standalone else None,
+            "config": ArgumentParser(add_help=False, prog='', wrapper=self) if not standalone else None,
+            "args": ArgumentParser(add_help=False, prog='', wrapper=self),
         }
         self.config_type = ctype
         self.config_dest = None
@@ -388,6 +388,8 @@ class ConfigParser:
 
         for arg, kwargs in self.config_type._arguments.items():
             add_argument(self.args, arg, kwargs)
+
+        return config_arg
 
     def parse_known_args(self, args=None, namespace=None):
         if not self.standalone:
@@ -548,7 +550,7 @@ class ArgumentParser(argparse.ArgumentParser):
             custom = update_custom(custom, "strict", strict)
 
             # add config(object) to parser
-            cparser.add_arguments(config_params, custom=custom)
+            config_arg = cparser.add_arguments(config_params, custom=custom)
             self._config_parsers[cparser.config_dest] = cparser
 
             # for ConfigObjects, lock all to prevent extra args being added via source

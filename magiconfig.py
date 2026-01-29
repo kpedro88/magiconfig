@@ -401,11 +401,29 @@ class ConfigParser:
             base_args, args = self.base.parse_known_args(args, namespace)
         if self.config:
             config_args, args = self.config.parse_known_args(args, namespace)
-            # load the config using base_args info
+            config_vals = getattr(config_args, self.config_dest)
+            config_obj = base_args.obj
+            config_strict = base_args.strict
+
+            # generalize for nargs>1 case
+            if not isinstance(config_vals, list):
+                config_vals = [config_vals]
+            if not isinstance(config_obj, list):
+                config_obj = [config_obj for _ in config_vals]
+            if len(config_obj)!=len(config_vals):
+                # todo: make this error message more specific (refer to arg option_strings or dests)
+                raise MagiConfigError("Must specify either 1 or N config objects, where N is the number of configs")
+
+            # load and process the configs using base_args info
+            def load_config(config_name, config_obj):
+                return import_config(config_name, config_obj)
+            config_result = MagiConfig()
+            for iconfig, config_val in enumerate(config_vals):
+                config_tmp = load_config(config_val, config_obj[iconfig])
+                config_result.join(config_tmp, prefer_other=True)
             self.args.parse_config(
-                getattr(config_args, self.config_dest),
-                base_args.obj,
-                base_args.strict,
+                config_result,
+                config_strict,
                 namespace=namespace
             )
         # "args" parser should always exist
@@ -592,6 +610,11 @@ class ArgumentParser(argparse.ArgumentParser):
                 return custom
             custom = update_custom(custom, "obj", obj)
             custom = update_custom(custom, "strict", strict)
+            # handle nargs: propagate to obj
+            # todo: make this more specific/flexible (to support '1 or N' cases wherever possible)
+            nargs_arg = kwargs.get("nargs", None)
+            if nargs_arg is not None:
+                custom["obj"]["nargs"] = nargs_arg
 
             # add config(object) to parser
             config_arg = cparser.add_arguments(config_params, custom=custom)
@@ -690,12 +713,9 @@ class ArgumentParser(argparse.ArgumentParser):
 
         return namespace, args
 
-    def parse_config(self, config_name, config_obj, config_strict, namespace=None):
+    def parse_config(self, config, config_strict, namespace=None):
         # in case used standalone
         namespace = _check_namespace(namespace)
-
-        # import config as module
-        config = import_config(config_name, config_obj)
 
         # handle values in sub-configs by restoring dots in keys
         def flatten_vars(config,pre=""):
@@ -743,11 +763,11 @@ class ArgumentParser(argparse.ArgumentParser):
         # check missing required config-only args
         config_only_missing = set([dest for dest,action in self._config_only.items() if action.required]) - set([attr for attr in flat_vars])
         if len(config_only_missing)>0:
-            raise MagiConfigError("Imported config missing required attributes: "+','.join(sorted(list(config_only_missing))))
+            raise MagiConfigError("Imported config(s) missing required attributes: "+','.join(sorted(list(config_only_missing))))
 
         # check strict
         if config_strict and len(unknown_attrs)>0:
-            raise MagiConfigError("Imported config contained unknown attributes: "+','.join(unknown_attrs))
+            raise MagiConfigError("Imported config(s) contained unknown attributes: "+','.join(unknown_attrs))
 
         return namespace
 

@@ -72,7 +72,7 @@ class MagiConfig(argparse.Namespace):
     def vars(self, transient=False):
         return {k:v for k,v in self.__dict__ if transient or k not in self._transients}
 
-    def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
+    def write(self, filename, config_obj, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False, append=False):
         if len(config_obj)==0:
             raise MagiConfigError("config_obj must be specified")
 
@@ -87,7 +87,12 @@ class MagiConfig(argparse.Namespace):
         imports, lines = self._write(config_obj, attr_imports, class_imports, attr_reprs, class_reprs, strict)
 
         # write namespace into file
-        with open(filename,'w') as outfile:
+        write_type = 'w'
+        if append:
+            write_type = 'a'
+        with open(filename,write_type) as outfile:
+            if append:
+                outfile.write('\n')
             outfile.write('\n'.join(default_imports+sorted(list(imports))+[""]+lines))
 
     def _write(self, config_obj, attr_imports, class_imports, attr_reprs, class_reprs, strict):
@@ -772,11 +777,17 @@ class ArgumentParser(argparse.ArgumentParser):
         return namespace
 
     # write namespace into file using config_obj
-    def write_config(self, namespace, filename, obj=None, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
-        if obj is None:
-            if self.config_options is not None: obj = self.config_options.obj
-            else: obj = "config"
-        namespace.write(filename, obj, attr_imports, class_imports, attr_reprs, class_reprs, strict)
+    def write_config(self, namespace, filename, obj="config", separate=False, attr_imports=None, class_imports=None, attr_reprs=None, class_reprs=None, strict=False):
+        if not isinstance(namespace, MagiConfig):
+            if type(namespace)==argparse.Namespace:
+                raise MagiConfigError("Cannot write plain argparse namespace (maybe from ArgumentParser in mixed mode)")
+            else:
+                raise MagiConfigError(f"Cannot write namespace of unknown type {type(namespace).__name__}")
+        configs = [namespace]
+        if separate:
+            configs = [v for v in namespace.vars() if isinstance(v, MagiConfig)]
+        for iconfig,config in enumerate(configs):
+            config.write(filename, obj, attr_imports, class_imports, attr_reprs, class_reprs, strict, append=separate and iconfig>0)
 
     def _get_config_only_kwargs(self, arg, **kwargs):
         return dict(kwargs, dest=arg, option_strings=[])

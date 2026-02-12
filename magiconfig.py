@@ -485,6 +485,7 @@ class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self._basic = kwargs.pop("basic", False)
         self._wrapper = kwargs.pop("wrapper", None)
+        self._auto_source = kwargs.pop("auto_source", False)
         # must be defined before base class constructor is called
         self._dests_actions = defaultdict(list)
         self._config_only = OrderedDict()
@@ -515,6 +516,12 @@ class ArgumentParser(argparse.ArgumentParser):
             if result:
                 return result
         return None
+
+    def _get_top_level(self):
+        if self._wrapper:
+            return self._wrapper.root
+        else:
+            return self
 
     def set_default_source(self, source):
         if self._find_source(source):
@@ -631,6 +638,9 @@ class ArgumentParser(argparse.ArgumentParser):
 
             # for ConfigObjects, lock all to prevent extra args being added via source
             cparser.lock(all=not config)
+
+            if config and self._auto_source:
+                self._get_top_level().set_default_source(cparser.config_dest)
 
             return config_arg
         else:

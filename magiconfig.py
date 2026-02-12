@@ -492,11 +492,15 @@ class ArgumentParser(argparse.ArgumentParser):
         self._standalone_parser = ConfigParser(self, self, standalone=True) if not self._wrapper else None
         self._default_source = None
         self._locked = False
+        self._lock_groups = False
         self._required = []
         # temporary workaround
         usage = kwargs.get("usage", None)
         if not usage: kwargs["usage"] = "[options]"
         super().__init__(self, *args, **kwargs)
+        # prevent further groups (beyond default positional and optional) from being added for non-top-level parsers
+        if self._wrapper:
+            self._lock_groups = True
 
         # initialize config arg in basic scenario
         if self._basic:
@@ -834,6 +838,8 @@ class ArgumentParser(argparse.ArgumentParser):
 
     # directly copied (to use patched Group classes)
     def add_argument_group(self, *args, **kwargs):
+        if self._wrapper and self._lock_groups:
+            raise MagiConfigError("Only top-level parsers can have argument groups")
         group = _ArgumentGroup(self, *args, **kwargs)
         self._action_groups.append(group)
         return group

@@ -332,6 +332,12 @@ def _check_namespace(namespace):
     elif len(vars(namespace))==0: return MagiConfig()
     else: return MagiConfig(**vars(namespace))
 
+class _HelpAction(argparse._HelpAction):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # call functions from the top-level parser, rather than temporary internal dedicated help parser
+        parser._get_top_level().print_help()
+        parser._get_top_level().exit()
+
 # hierarchical parsing for configs and ConfigObjects:
 # 1. base arguments (obj, strict)
 # 2. config itself
@@ -491,6 +497,8 @@ class ArgumentParser(argparse.ArgumentParser):
         self._config_only = OrderedDict()
         self._config_parsers = OrderedDict()
         self._standalone_parser = ConfigParser(self, self, standalone=True) if not self._wrapper else None
+        # a separate standalone parser specifically for --help (standalone parser goes first, help parser goes last)
+        self._help_parser = ConfigParser(self, self, standalone=True) if not self._wrapper else None
         self._default_source = None
         self._locked = False
         self._lock_groups = False
@@ -553,6 +561,7 @@ class ArgumentParser(argparse.ArgumentParser):
         type_arg = kwargs.get("type", None)
         help_arg = kwargs.get("help", None)
         default_arg = kwargs.get("default", None)
+        action_arg = kwargs.get("action", None)
 
         # pull out all custom kwargs
         # inappropriate kwargs for a given case will just be ignored
@@ -600,6 +609,13 @@ class ArgumentParser(argparse.ArgumentParser):
         # check for incompatible combinations
         if config_only and not self._wrapper:
             raise MagiConfigError("Cannot add config_only argument to top-level parser; please assign a source")
+
+        # special handling of help action
+        if action_arg=='help' or action_arg==argparse._HelpAction:
+            if self._wrapper:
+                raise MagiConfigError("Can only add help argument to top-level parser")
+            kwargs['action'] = _HelpAction
+            this_arg = self._help_parser.add_argument_wrapped(*args, **kwargs)
 
         if config_object:
             if not help_arg: kwargs["help"] = type_arg._help
@@ -688,6 +704,8 @@ class ArgumentParser(argparse.ArgumentParser):
             return len(parser._config_parsers)>0
         def has_standalone(parser):
             return parser._standalone_parser is not None and len(parser._standalone_parser._actions)>0
+        def has_help(parser):
+            return parser._help_parser is not None and len(parser._help_parser._actions)>0
         def has_only_configs(parser):
             return has_configs(parser) and not has_standalone(parser)
 
@@ -724,6 +742,10 @@ class ArgumentParser(argparse.ArgumentParser):
                 # result is new MagiConfig or ConfigObject
                 config_result, args = cparser.parse_known_args(args=args)
                 setattr(namespace, cparser.config_dest, config_result)
+
+        # finally, check for help action
+        if has_help(self):
+            namespace, args = self._help_parser.parse_known_args(args=args, namespace=namespace)
 
         # restore required actions
         self._restore_required(self._required)

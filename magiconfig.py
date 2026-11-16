@@ -23,6 +23,9 @@ __all__ = [
     "import_config",
     "imported",
     "DictAction",
+    "arguments",
+    "shared",
+    "app",
     "main",
     # re-exported from argparse
     "Action",
@@ -1759,6 +1762,55 @@ class DictAction(argparse.Action):
 
     def from_config(self, value):
         return self.convert(value.items())
+
+
+def shared(**specs):
+    """A set of arguments (add_argument kwargs by name) that can be shared between functions via arguments(_parents=...)."""
+    return type("Shared", (ConfigObject,), dict(_arguments=specs))
+
+
+def arguments(_parents=(), **specs):
+    """Decorator that attaches a proxy ConfigObject for the function as fn.Config.
+
+    The arguments are the merged _arguments of the parents (e.g. from shared()), updated with specs
+    (add_argument kwargs by name). The function itself is unchanged.
+    """
+    def decorator(fn):
+        merged = {}
+        for parent in _parents:
+            merged.update(parent._arguments)
+        merged.update(specs)
+        fn.Config = type(fn.__name__, (ConfigObject,), dict(
+            _arguments=merged,
+            _description=fn.__doc__ or "",
+            _principal=staticmethod(fn),
+            __module__=fn.__module__,
+            __qualname__=f"{fn.__qualname__}.Config",
+        ))
+        return fn
+    return decorator
+
+
+def app(**parser_kwargs):
+    """Decorator (applied outside arguments()) that makes the function a command-line application.
+
+    Attaches fn.parser (an ArgumentParser with -C/--config for the function's arguments)
+    and fn.main(argv=None), which parses the arguments and calls the function with them.
+    Run it explicitly, e.g.: if __name__ == "__main__": fn.main()
+    """
+    def decorator(fn):
+        if not hasattr(fn, "Config"):
+            arguments()(fn)
+        parser_kwargs.setdefault("description", fn.__doc__)
+        parser = ArgumentParser(**parser_kwargs)
+        parser.add_argument("-C", "--config", type=fn.Config, prefix=False, obj=ASK, description=argparse.SUPPRESS)
+        fn.parser = parser
+
+        def main(argv=None):
+            return fn.Config._build_impl(parser.parse_args(argv))
+        fn.main = main
+        return fn
+    return decorator
 
 
 def main(argv=None):

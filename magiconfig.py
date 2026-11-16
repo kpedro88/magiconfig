@@ -446,11 +446,7 @@ class ConfigObject:
         """
         root = ArgumentParser(prog=cls.__name__, add_help=False)
         root.add_argument("--config", type=cls, obj=obj, strict=strict)
-        cparser = root._config_parsers["config"]
-        try:
-            value, _, _ = cparser.parse([], config, False)
-        finally:
-            root._restore_required()
+        value, _, _ = root._config_parsers["config"].parse([], config, False)
         return value
 
     @classmethod
@@ -800,6 +796,15 @@ class ConfigParser:
         Returns (value, source, remaining args): the value is a MagiConfig for config=True sections
         or a built object for ConfigObjects; the source is the MagiConfig used to build it.
         """
+        root = self.root
+        # required flags are suppressed only while this section is parsed
+        mark = len(root._suppressed)
+        try:
+            return self._parse(args, inherited, suppress_required)
+        finally:
+            root._restore_required(mark)
+
+    def _parse(self, args, inherited, suppress_required):
         root = self.root
         if suppress_required or inherited is not None:
             root._suppress_required([self.config_action])
@@ -1220,10 +1225,10 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
                 action.required = False
                 self._suppressed.append(action)
 
-    def _restore_required(self):
-        for action in self._suppressed:
+    def _restore_required(self, mark=0):
+        for action in self._suppressed[mark:]:
             action.required = True
-        self._suppressed = []
+        del self._suppressed[mark:]
 
     def _expand_abbrevs(self, args):
         """Expand unambiguous abbreviations of long options across this parser and all config sections."""
@@ -1290,8 +1295,6 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
             if self.exit_on_error:
                 self.error(str(err))
             raise
-        finally:
-            self._restore_required()
 
     def parse_known_intermixed_args(self, args=None, namespace=None):
         if self._has_configs():

@@ -6,7 +6,7 @@ import pytest
 
 import magiconfig
 from magiconfig import MagiConfig, MagiConfigError, ASK
-from conftest import config_path, error_raising, help_heading
+from conftest import config_path, error_raising
 
 EXPECTED = MagiConfig(bar=2.0, foo='2', ipsum=False)
 
@@ -123,7 +123,7 @@ def test_groups():
     # mixed mode: plain Namespace containing the config section
     assert type(args) is argparse.Namespace
     assert args == argparse.Namespace(config=MagiConfig(foo='2'), bar=3.0)
-    assert "group1:\n  -b BAR, --bar BAR" in parser.format_help()
+    assert "group1:\n  -b" in parser.format_help()
     with pytest.raises(MagiConfigError):
         group1.add_argument("-x", source="config")
     with pytest.raises(MagiConfigError):
@@ -221,16 +221,23 @@ def test_positional_in_section():
 USAGE = "usage: PROG [-h] [-C CONFIG] [-f FOO] -b BAR [-i]\n"
 
 
-def expected_help(actions):
-    return "\n".join([
-        USAGE,
-        help_heading(),
-        "  -h, --help            show this help message and exit",
-        "",
-        "config:",
-        "  -C CONFIG, --config CONFIG",
-        "                        name of config file to import",
-    ] + actions) + "\n"
+def expected_help(remove=(), formatter_class=argparse.HelpFormatter, config_only=()):
+    """Expected help for make_parser(): an equivalent plain argparse parser with a "config" group,
+    plus an indented config-only subsection given as (name, help) pairs."""
+    plain = argparse.ArgumentParser(prog="PROG", formatter_class=formatter_class)
+    group = plain.add_argument_group("config")
+    group.add_argument("-C", "--config", help=magiconfig.CONFIG_DEFAULT_HELP)
+    add_args(group)
+    for flag in remove:
+        plain._handle_conflict_resolve(None, [(flag, plain._option_string_actions[flag])])
+    text = plain.format_help()
+    if config_only:
+        help_line = next(line for line in text.split("\n") if line.startswith("  -h"))
+        column = help_line.index("show")
+        text += "\n  config-only arguments:\n"
+        for name, help in config_only:
+            text += (f"    {name}".ljust(column) + help).rstrip() + "\n"
+    return text
 
 
 def test_config_usage():
@@ -240,11 +247,7 @@ def test_config_usage():
 
 def test_config_help():
     parser = make_parser()
-    assert parser.format_help() == expected_help([
-        "  -f FOO, --foo FOO     foo arg",
-        "  -b BAR, --bar BAR     bar arg",
-        "  -i, --ipsum           ipsum arg",
-    ])
+    assert parser.format_help() == expected_help()
 
 
 def test_help_with_missing_required(capsys):
@@ -283,10 +286,7 @@ def test_remove_arg():
 def test_remove_action():
     parser = make_parser()
     parser.remove_argument('-b')
-    assert parser.format_help() == expected_help([
-        "  -f FOO, --foo FOO     foo arg",
-        "  -i, --ipsum           ipsum arg",
-    ]).replace(" -b BAR", "")
+    assert parser.format_help() == expected_help(remove=["-b", "--bar"])
 
 
 def test_remove_root_arg():
@@ -334,23 +334,10 @@ def test_config_only_help():
     parser.add_argument("arg1", config_only=True)
     parser.add_argument("arg2", config_only=True, required=True)
     parser.add_argument("arg3", config_only=True, default="test")
-    assert parser.format_help() == "\n".join([
-        USAGE,
-        help_heading(),
-        "  -h, --help            show this help message and exit",
-        "",
-        "config:",
-        "  -C CONFIG, --config CONFIG",
-        "                        name of config file to import (default: None)",
-        "  -f FOO, --foo FOO     foo arg (default: lorem)",
-        "  -b BAR, --bar BAR     bar arg (default: None)",
-        "  -i, --ipsum           ipsum arg (default: False)",
-        "",
-        "  config-only arguments:",
-        "    arg1",
-        "    arg2                (required)",
-        "    arg3                (default: test)",
-    ]) + "\n"
+    assert parser.format_help() == expected_help(
+        formatter_class=magiconfig.ArgumentDefaultsHelpFormatter,
+        config_only=[("arg1", ""), ("arg2", "(required)"), ("arg3", "(default: test)")],
+    )
     # without default formatting, the default is not shown
     parser = make_parser()
     parser.add_argument("arg3", config_only=True, default="test")

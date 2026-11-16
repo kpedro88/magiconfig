@@ -526,13 +526,6 @@ class _MagiFormatterMixin:
             action.help = super()._get_help_string(action).strip() or None
         return super()._format_action(action)
 
-    def _expand_help(self, action):
-        # display classes by name
-        if isinstance(action.default, type):
-            action = copy.copy(action)
-            action.default = action.default.__name__
-        return super()._expand_help(action)
-
 
 _formatter_classes = {}
 
@@ -989,7 +982,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
     def add_argument(self, *args, **kwargs):
         """argparse add_argument(), with additional kwargs for configs and config sections (see README)."""
         magi = {key: kwargs.pop(key) for key in _MAGI_KWARGS if key in kwargs}
-        if not magi and self._default_source is None:
+        if not magi and self._default_source is None and not _is_config_object(kwargs.get("type")):
             return super().add_argument(*args, **kwargs)
 
         self._magi_calls.append(("add_argument", args, dict(kwargs, **magi)))

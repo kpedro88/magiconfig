@@ -638,8 +638,8 @@ class _MagiParserBase:
             from_config = getattr(actions[0], "from_config", None)
             if from_config is not None:
                 val = from_config(self, val)
-            # check type if uniquely provided (and not None)
-            elif len(set(action.type for action in actions)) == 1 and actions[0].type is not None:
+            # check type (if uniquely provided and not None) and choices
+            elif len(set(action.type for action in actions)) == 1 and (actions[0].type is not None or actions[0].choices is not None):
                 action = actions[0]
                 # argparse does not apply type or choice checks to default args
                 if val == action.default:
@@ -647,7 +647,8 @@ class _MagiParserBase:
                 # nargs=0 is usually _StoreTrueAction or _StoreFalseAction:
                 # _get_values() expects an empty list for those, but we want to check the type of the provided value
                 elif action.nargs == 0:
-                    val = action.type(val)
+                    if action.type is not None:
+                        val = action.type(val)
                 else:
                     # use _get_values() rather than _get_value() to handle nargs cases; also enforces choices if any
                     val = self._get_values(action, val if isinstance(val, list) else [val])
@@ -991,7 +992,8 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
             section = self._find_section(source)
             if section.locked:
                 raise MagiConfigError(f"Arguments cannot be added to ConfigObject section {section.path}")
-        elif not self._creates_section(kwargs, magi) and kwargs.get("action") not in ("help", "version", argparse._HelpAction, argparse._VersionAction):
+        elif not magi.get("config", False) and kwargs.get("action") not in ("help", "version", argparse._HelpAction, argparse._VersionAction):
+            # config=True args always create top-level sections; ConfigObjects are nested in the default source
             section = self._default_source
         else:
             section = None

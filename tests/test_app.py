@@ -27,6 +27,15 @@ def test_direct_call():
     assert train.Config.__doc__.startswith("Train a model.\n\nArguments:\n    verbose: verbose output\n")
 
 
+def test_called_once(capsys):
+    @magiconfig.app()
+    @magiconfig.arguments(x=dict(default=1))
+    def show(x):
+        print(x)
+    show.main([])
+    assert capsys.readouterr().out == "1\n"
+
+
 def test_main(tmp_path):
     assert train.main(["--epochs", "5"]) == dict(lr=0.1, epochs=5, verbose=False, seed=0)
     config = make_config(tmp_path / "cfg.py", epochs=3, lr=0.5, seed=7)

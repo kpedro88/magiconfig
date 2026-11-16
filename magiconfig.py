@@ -903,7 +903,8 @@ class ConfigParser:
             _mark_transient(namespace, dest)
         namespace._imported.extend(loaded._imported)
 
-        if self.ctype is MagiConfig:
+        # with prefix=False, the fields are merged into the parent namespace, so nothing is built
+        if self.ctype is MagiConfig or not self.prefix:
             return namespace, namespace, args
         value = self.ctype._build_impl(namespace)
         return value, (self.ctype, namespace) if self.typed else namespace, args

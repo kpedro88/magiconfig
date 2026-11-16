@@ -53,3 +53,10 @@ except ImportError:
 def pytest_report_header(config):
     if _argparse_tests_skipped:
         return "upstream argparse tests skipped: CPython test package unavailable"
+
+
+def make_config(path, obj="config", **attrs):
+    """Write a config file defining MagiConfig(**attrs) as `obj`; returns the path as a string."""
+    from magiconfig import MagiConfig
+    MagiConfig(**attrs).write(str(path), obj)
+    return str(path)

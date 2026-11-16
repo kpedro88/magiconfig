@@ -59,8 +59,9 @@ def _rgetattr(obj, attr, *default):
     return functools.reduce(_getattr, [obj] + attr.split('.'))
 
 
-# module name -> path as given, for modules loaded by import_config()
+# module name -> path as given, and file state (mtime, size) when loaded, for modules loaded by import_config()
 _import_config_paths = {}
+_import_config_states = {}
 
 
 def import_config(file_path, attrs=None):
@@ -68,7 +69,7 @@ def import_config(file_path, attrs=None):
 
     `attrs` may be a (dotted) attribute name, a list of names, or None to return the module itself.
     The module name is derived deterministically from the absolute path,
-    so a file is executed only once per process and repeated imports return the same objects.
+    so a file is executed only once per process (unless it changes) and repeated imports return the same objects.
     """
     # from https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
     import base64
@@ -80,18 +81,26 @@ def import_config(file_path, attrs=None):
     # md5 for determinism, base64 for conciseness (made identifier-safe)
     path_hash = base64.b64encode(hashlib.md5(abs_path.encode('utf-8')).digest(), b'__').decode('utf-8').rstrip('=')
     module_name = f"{os.path.basename(file_path).replace('.', '_')}__{path_hash}"
-    if module_name in sys.modules:
+    stat = os.stat(abs_path)
+    file_state = (stat.st_mtime_ns, stat.st_size)
+    if module_name in sys.modules and _import_config_states.get(module_name) == file_state:
         module = sys.modules[module_name]
     else:
+        # (re)load if not loaded yet or if the file changed since it was loaded
         spec = importlib.util.spec_from_file_location(module_name, abs_path)
         module = importlib.util.module_from_spec(spec)
+        previous = sys.modules.get(module_name)
         sys.modules[module_name] = module
         try:
             spec.loader.exec_module(module)
         except BaseException:
-            del sys.modules[module_name]
+            if previous is None:
+                del sys.modules[module_name]
+            else:
+                sys.modules[module_name] = previous
             raise
         _import_config_paths[module_name] = file_path
+        _import_config_states[module_name] = file_state
 
     def get(attr):
         try:
@@ -254,8 +263,8 @@ class _WriteOptions:
 
     def value_expr(self, name, attr, val):
         """Imports and repr-style expression for a regular value."""
-        if isinstance(val, type):
-            return _class_expr(val)
+        if isinstance(val, type) or isinstance(val, (tuple, list, dict)) and _contains_class(val):
+            return _source_expr(val, self)
         valclass = val.__class__
         imports = self.get_imports(attr, val)
         # precedence: attr-specific > class-specific > default
@@ -317,9 +326,23 @@ class _WriteOptions:
         return imports
 
 
+def _contains_class(val, checked=None):
+    """Whether a (nested) tuple/list/dict contains class objects, which need imports rather than repr()."""
+    if checked is None:
+        checked = set()
+    if isinstance(val, type):
+        return True
+    if not isinstance(val, (tuple, list, dict)) or id(val) in checked:
+        return False
+    checked.add(id(val))
+    items = val.values() if isinstance(val, dict) else val
+    return any(_contains_class(item, checked) for item in items)
+
+
 def _source_expr(val, opts):
-    """Imports and expression for the source of a built ConfigObject:
-    a MagiConfig, a (class, MagiConfig) tuple for typed args, or a list/dict of those for containers."""
+    """Imports and expression for the source of a built ConfigObject
+    (a MagiConfig, a (class, MagiConfig) tuple for typed args, or a list/dict of those for containers),
+    or for any tuple/list/dict containing classes."""
     if isinstance(val, MagiConfig):
         return val._inline(opts)
     elif isinstance(val, type):
@@ -750,8 +773,15 @@ class ConfigParser:
     1. base arguments (obj, strict, src)
     2. the config argument itself
     3. the section's arguments, including nested sections
+
+    Variants:
+    * typed (action="specify_type"): the ConfigObject class is chosen on the command line or in the parent config,
+      and the section's arguments are rebuilt for that class (set_type)
+    * container (container=list or dict): a list or dict of ConfigObjects, with one element section per index or key;
+      element sections are rebuilt at each parse
     """
-    def __init__(self, root, parent, dest, ctype, prefix=True, description=None, config_only_help=True):
+    def __init__(self, root, parent, dest, ctype, prefix=True, description=None, config_only_help=True,
+                 typed=False, container=None, element=False, choices=None, config_choices=None, custom=None):
         self.root = root
         self.parent = parent
         self.dest = dest
@@ -769,11 +799,26 @@ class ConfigParser:
         self.config = _NestedParser(root, allow_positionals=parent is None)
         self.args = _NestedParser(root)
         self.children = OrderedDict()
-        self.description = description if description is not None else getattr(ctype, "_description", None)
+        self.user_description = description
         self.config_only_help = config_only_help
         self.config_action = None
+        self.typed = typed
+        self.container = container
+        self.element = element
+        self.choices = choices
+        self.config_choices = config_choices
+        self.custom = custom or {}
+        # for containers: the element class (if not typed) and the default container value
+        self.element_type = None
+        self.container_default = None
         # user arguments can be added (via source) only to config=True sections
         self.locked = ctype is not MagiConfig
+
+    @property
+    def description(self):
+        if self.user_description is not None:
+            return self.user_description
+        return getattr(self.ctype, "_description", None) or None
 
     def parsers(self):
         return [self.base, self.config, self.args]
@@ -784,11 +829,15 @@ class ConfigParser:
         for child in self.children.values():
             yield from child.sections()
 
+    def base_names(self):
+        return ("obj", "strict", "src") if self.typed else ("obj", "strict")
+
     def parse(self, args, inherited, suppress_required):
         """Parse this section from the command line `args`, with an optional value `inherited` from the parent config.
 
         Returns (value, source, remaining args): the value is a MagiConfig for config=True sections
-        or a built object for ConfigObjects; the source is the MagiConfig used to build it.
+        or a built object for ConfigObjects; the source is what is written to reproduce it
+        (the MagiConfig used to build it, a (class, MagiConfig) tuple for typed args, or a list/dict of those for containers).
         """
         root = self.root
         # required flags are suppressed only while this section is parsed
@@ -806,9 +855,30 @@ class ConfigParser:
             root._suppress_required(self.base._actions)
         base_ns, args = self.base.parse_known_args(args, argparse.Namespace())
         cfg_ns, args = self.config.parse_known_args(args, argparse.Namespace(**{self.config_action.dest: _UNSET}))
-        values = getattr(cfg_ns, self.config_action.dest)
-        if values is _UNSET:
-            values = inherited if inherited is not None else self.config_action.default
+        given = getattr(cfg_ns, self.config_action.dest)
+
+        if self.container is not None:
+            return self.parse_container(args, given, inherited, base_ns, suppress_required)
+
+        if given is not _UNSET:
+            values = given
+        elif inherited is not None:
+            values = inherited
+        else:
+            values = self.config_action.default
+
+        if self.typed:
+            cls, values = self.split_typed(values, given is not _UNSET)
+            if cls is None:
+                if self.element:
+                    raise MagiConfigError(f"{self.config_name()}: a class must be specified")
+                return None, None, args
+            cls = self.resolve_class(cls, base_ns.src)
+            if cls is not self.ctype:
+                self.set_type(cls)
+            for value in _as_list(values):
+                if isinstance(value, str):
+                    self.check_choice(value, self.config_choices)
 
         loaded = self.load(values, base_ns.obj)
 
@@ -826,7 +896,8 @@ class ConfigParser:
 
         if self.ctype is MagiConfig:
             return namespace, namespace, args
-        return self.ctype._build_impl(namespace), namespace, args
+        value = self.ctype._build_impl(namespace)
+        return value, (self.ctype, namespace) if self.typed else namespace, args
 
     def load(self, values, objs):
         """Load and join the config(s) in order (later ones preferred): paths are imported, MagiConfigs used directly."""
@@ -853,12 +924,165 @@ class ConfigParser:
     def config_name(self):
         return "argument " + ("/".join(self.config_action.option_strings) or self.config_action.dest)
 
+    # typed sections
+
+    def split_typed(self, values, from_command_line):
+        """Split a typed value into (class or name, config values).
+
+        Command line: [TYPE, CONFIG...]. Parent config or default: a class or name, a (class or name, config...) tuple,
+        or a MagiConfig (with the default class).
+        """
+        if from_command_line:
+            return values[0], values[1:]
+        elif isinstance(values, tuple):
+            return values[0], list(values[1:])
+        elif isinstance(values, MagiConfig):
+            return self.config_action.default, [values]
+        else:
+            return values, []
+
+    def check_choice(self, value, choices, name=None):
+        if choices is not None and value not in choices:
+            names = ", ".join(choice.__name__ if isinstance(choice, type) else repr(choice) for choice in choices)
+            shown = name if name is not None else value
+            raise argparse.ArgumentError(None, f"{self.config_name()}: invalid choice: {shown!r} (choose from {names})")
+
+    def resolve_class(self, value, src):
+        """Resolve a class or class name: src (module or .py file) > choices (by name) > ConfigObject registry."""
+        if isinstance(value, type):
+            cls = value
+        elif src is not None:
+            module = import_config(src) if src.endswith(".py") else importlib.import_module(src)
+            cls = getattr(module, value, None)
+            if cls is None:
+                raise MagiConfigError(f"{self.config_name()}: class {value} not found in {src}")
+        else:
+            cls = next((choice for choice in self.choices or [] if isinstance(choice, type) and choice.__name__ == value), None)
+            if cls is None:
+                candidates = list(_config_object_registry.get(value, {}).values())
+                if len(candidates) > 1:
+                    modules = ", ".join(candidate.__module__ for candidate in candidates)
+                    raise MagiConfigError(f"{self.config_name()}: class name {value} is ambiguous (defined in {modules}); specify src")
+                if not candidates:
+                    if self.choices is not None:
+                        self.check_choice(value, self.choices)
+                    raise MagiConfigError(f"{self.config_name()}: unknown ConfigObject class {value}")
+                cls = candidates[0]
+        if not _is_config_object(cls):
+            raise MagiConfigError(f"{self.config_name()}: {cls!r} is not a ConfigObject")
+        if self.choices is not None and not any(choice is cls if isinstance(choice, type) else choice == cls.__name__ for choice in self.choices):
+            self.check_choice(None, self.choices, cls.__name__)
+        return cls
+
+    def set_type(self, ctype):
+        """(Re)build the section's arguments for a ConfigObject class."""
+        self.unregister(args_only=True)
+        self.args = _NestedParser(self.root)
+        self.children = OrderedDict()
+        self.ctype = ctype
+        self.root._populate(self, ctype)
+
+    def unregister(self, args_only=False):
+        """Remove the option strings of this section (and nested sections) from the global registry."""
+        registry = self.root._nested_option_strings
+        parsers = [self.args] if args_only else self.parsers()
+        for child in self.children.values():
+            child.unregister()
+        for parser in parsers:
+            for action in parser._actions:
+                for option_string in action.option_strings:
+                    registry.pop(option_string, None)
+
+    # containers
+
+    def load_container(self, values, obj):
+        """Load and join container config files (by index or key, later ones preferred)."""
+        result = self.container()
+        for value in values:
+            loaded = import_config(value, obj)
+            self.check_container(loaded)
+            if self.container is list:
+                result[:len(loaded)] = loaded
+            else:
+                result.update(loaded)
+        return result
+
+    def check_container(self, value):
+        if not isinstance(value, self.container):
+            raise MagiConfigError(f"{self.config_name()}: expected a {self.container.__name__}, got {type(value).__name__}")
+        if self.container is dict:
+            for key in value:
+                self.check_key(key)
+
+    def check_key(self, key):
+        if not isinstance(key, str) or not key or "." in key or key in _BASE_ARGUMENTS:
+            raise MagiConfigError(f"{self.config_name()}: invalid key {key!r} (keys must be non-empty strings without '.' and cannot be {', '.join(_BASE_ARGUMENTS)})")
+
+    def element_flags(self, args):
+        """Indices or keys of element flags (--{dest}.{index or key}) on the command line, in order."""
+        keys = []
+        for arg in args:
+            if arg == "--":
+                break
+            if arg.startswith(self.flag_prefix):
+                segment = arg[len(self.flag_prefix):].split("=", 1)[0]
+                if "." not in segment and segment not in self.base_names() and segment not in keys:
+                    keys.append(segment)
+        return keys
+
+    def parse_container(self, args, given, inherited, base_ns, suppress_required):
+        if given is not _UNSET:
+            value = self.load_container(given, base_ns.obj)
+        elif inherited is not None:
+            value = inherited
+        elif self.container_default is not None:
+            value = self.container_default
+        else:
+            value = self.container()
+        self.check_container(value)
+
+        new_keys = self.element_flags(args)
+        if self.container is list:
+            for key in new_keys:
+                if not key.isdigit():
+                    raise MagiConfigError(f"{self.config_name()}: invalid list index {key!r}")
+            appended = sorted(int(key) for key in new_keys if int(key) >= len(value))
+            if appended != list(range(len(value), len(value) + len(appended))):
+                raise MagiConfigError(f"{self.config_name()}: list indices must be existing or consecutive after the last element ({len(value)})")
+            keys = list(range(len(value) + len(appended)))
+        else:
+            for key in new_keys:
+                self.check_key(key)
+            keys = list(value) + [key for key in new_keys if key not in value]
+
+        # elements are rebuilt at each parse
+        for child in self.children.values():
+            child.unregister()
+        self.children = OrderedDict()
+
+        values = self.container()
+        sources = self.container()
+        for key in keys:
+            child = self.root._add_element(self, key, base_ns)
+            element = value[key] if (key < len(value) if self.container is list else key in value) else None
+            cvalue, csource, args = child.parse(args, element, suppress_required)
+            if self.container is list:
+                values.append(cvalue)
+                sources.append(csource)
+            else:
+                values[key] = cvalue
+                sources[key] = csource
+        return values, sources, args
+
     def attach(self, namespace, value, source):
         """Store this section's result in the parent namespace: under its dest, or merged if prefix=False."""
         if self.prefix:
             setattr(namespace, self.dest, value)
-            if isinstance(namespace, MagiConfig) and source is not value and source is not None:
-                namespace._sources[self.dest] = source
+            if isinstance(namespace, MagiConfig):
+                if source is not value and source is not None:
+                    namespace._sources[self.dest] = source
+                else:
+                    namespace._sources.pop(self.dest, None)
         elif isinstance(namespace, MagiConfig):
             namespace.join(source, prefer_other=True)
         else:
@@ -888,16 +1112,29 @@ class ConfigParser:
         if show_children:
             for child in self.children.values():
                 child.format_help(formatter, level + 1, depth)
+            if self.container is not None and not self.children:
+                self.format_element_template(formatter, level + 1, depth)
         formatter.end_section()
+
+    def format_element_template(self, formatter, level, depth):
+        """Document the elements of an empty container."""
+        segment = "N" if self.container is list else "KEY"
+        if self.typed:
+            names = ", ".join(choice.__name__ if isinstance(choice, type) else str(choice) for choice in self.choices or [])
+            text = f"elements: {self.flag_prefix}{segment} TYPE [CONFIG ...]" + (f" (choose from {names})" if names else "")
+            formatter.add_text(text)
+            return
+        # build the element section in a separate parser, so its flags are not registered here
+        template = ArgumentParser(prog=self.root.prog, prefix_chars=self.root.prefix_chars, formatter_class=self.root.formatter_class, add_help=False)
+        template.add_argument(self.flag_prefix + segment, type=self.element_type, nargs="*", metavar="CONFIG", help="element config")
+        for section in template._config_parsers.values():
+            section.format_help(formatter, level, depth)
 
     def remove(self):
         """Remove this section (and all nested sections) from the top-level parser."""
         root = self.root
+        self.unregister()
         for section in self.sections():
-            for parser in section.parsers():
-                for action in parser._actions:
-                    for option_string in action.option_strings:
-                        root._nested_option_strings.pop(option_string, None)
             if root._default_source is section:
                 root._default_source = None
         siblings = self.parent.children if self.parent is not None else root._config_parsers
@@ -983,7 +1220,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
     def add_argument(self, *args, **kwargs):
         """argparse add_argument(), with additional kwargs for configs and config sections (see README)."""
         magi = {key: kwargs.pop(key) for key in _MAGI_KWARGS if key in kwargs}
-        if not magi and self._default_source is None and not _is_config_object(kwargs.get("type")):
+        if not magi and self._default_source is None and not self._creates_section(kwargs, magi):
             return super().add_argument(*args, **kwargs)
 
         self._magi_calls.append(("add_argument", args, dict(kwargs, **magi)))
@@ -1026,7 +1263,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
 
     @staticmethod
     def _creates_section(kwargs, magi):
-        return magi.get("config", False) or _is_config_object(kwargs.get("type"))
+        return magi.get("config", False) or _is_config_object(kwargs.get("type")) or kwargs.get("action") == "specify_type"
 
     def _add(self, section, args, kwargs, magi, group=None):
         """Add an argument to a config section (or to this parser if section is None)."""
@@ -1062,24 +1299,46 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         return action
 
     def _add_section(self, parent, args, kwargs, magi):
-        """Create a config section for a config=True or ConfigObject argument."""
+        """Create a config section for a config=True, ConfigObject, or typed ConfigObject argument (or a container of them)."""
         kwargs = dict(kwargs)
+        typed = kwargs.get("action") == "specify_type"
+        if typed:
+            kwargs.pop("action")
+            if "type" in kwargs:
+                raise MagiConfigError("action='specify_type' cannot be combined with type")
         if magi.pop("config", False):
             ctype = MagiConfig
+        elif typed:
+            ctype = None
         else:
             ctype = kwargs.pop("type")
+        container = magi.pop("container", None)
+        if container not in (None, list, dict) or container is not None and ctype is MagiConfig:
+            raise MagiConfigError("container must be list or dict, and is only supported for ConfigObject args")
         prefix = magi.pop("prefix", True)
         if not prefix and parent is not None:
             raise MagiConfigError("prefix=False is only supported for top-level config args")
-        description = magi.pop("description", None)
-        config_only_help = magi.pop("config_only_help", True)
+        if not prefix and (typed or container is not None):
+            raise MagiConfigError("prefix=False is not supported for typed or container args")
         custom = dict(magi.pop("custom", None) or {})
-        for key in ("obj", "strict"):
+        for key in ("obj", "strict", "src"):
             val = magi.pop(key, None)
             if val is not None:
+                if key == "src" and not typed:
+                    raise MagiConfigError("src is only supported for typed ConfigObject args (action='specify_type')")
                 custom_key = dict(custom[key]) if isinstance(custom.get(key), dict) else {}
                 custom_key.update({"disable": False} if val == ASK else {"default": val})
                 custom[key] = custom_key
+        section_kwargs = dict(
+            prefix=prefix,
+            description=magi.pop("description", None),
+            config_only_help=magi.pop("config_only_help", True),
+            typed=typed,
+            container=container,
+            choices=kwargs.pop("choices", None) if typed else None,
+            config_choices=magi.pop("config_choices", None),
+            custom=custom,
+        )
         if magi:
             raise MagiConfigError(f"Arguments not supported for this config arg: {', '.join(magi)}")
         kwargs.setdefault("help", CONFIG_DEFAULT_HELP)
@@ -1088,33 +1347,33 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
             dest = args[0]
         else:
             dest = self._get_optional_kwargs(*args, **kwargs)["dest"]
-        section = ConfigParser(self, parent, dest, ctype, prefix=prefix, description=description, config_only_help=config_only_help)
+        section = ConfigParser(self, parent, dest, None if container is not None else ctype, **section_kwargs)
 
-        # the argument that reads the name(s) of the config file(s)
-        section.config_action = section.config.add_argument(*args, type=str, **kwargs)
+        # the argument that reads the config file(s) (preceded by the class for typed args)
+        if container is not None:
+            section.element_type = ctype
+            section.container_default = kwargs.pop("default", None)
+            kwargs.update(nargs="+", metavar="CONFIG")
+        elif typed:
+            kwargs.update(nargs="+", metavar=("TYPE", "CONFIG"))
+        else:
+            kwargs["type"] = str
+        section.config_action = section.config.add_argument(*args, **kwargs)
 
-        # base arguments
-        known = {"obj", "strict"}
-        nargs = kwargs.get("nargs")
-        for key in ("obj", "strict"):
-            base_kwargs = dict(_BASE_ARGUMENTS[key])
-            if key == "obj" and nargs is not None:
-                base_kwargs["nargs"] = nargs
-            base_kwargs = self._customize(ctype, key, base_kwargs, custom)
-            self._add_member(section, section.base, key, base_kwargs)
+        self._add_base_args(section, kwargs.get("nargs") if ctype is MagiConfig or not (typed or container) else None)
 
-        # ConfigObject arguments
-        if ctype is not MagiConfig:
+        known = set(section.base_names())
+        if container is None:
+            default = section.config_action.default
+            if typed and isinstance(default, tuple):
+                default = default[0]
+            if typed and isinstance(default, type):
+                section.ctype = default
+            if section.ctype not in (None, MagiConfig):
+                self._populate(section, section.ctype)
+                known.update(section.ctype._arguments)
+        elif ctype is not None:
             known.update(ctype._arguments)
-            groups = {}
-            for entry in ctype._mutually_exclusive:
-                mutex = section.args.add_mutually_exclusive_group(required=entry.get("required", False))
-                for name in entry["arguments"]:
-                    groups[name] = mutex
-            for key, arg_kwargs in ctype._arguments.items():
-                arg_kwargs = self._customize(ctype, key, dict(arg_kwargs), custom)
-                self._add_member(section, section.args, key, arg_kwargs, groups.get(key))
-
         for key in custom:
             if key not in known:
                 warnings.warn(f"{self._ctype_name(ctype)}: unknown argument {key} in custom; ignoring")
@@ -1125,9 +1384,49 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
             self._default_source = section
         return section.config_action
 
+    def _add_base_args(self, section, nargs=None, defaults=None):
+        for key in section.base_names():
+            base_kwargs = dict(_BASE_ARGUMENTS[key])
+            if key == "obj" and nargs is not None:
+                base_kwargs["nargs"] = nargs
+            base_kwargs = self._customize(section.ctype, key, base_kwargs, section.custom)
+            if defaults is not None:
+                base_kwargs["default"] = getattr(defaults, key)
+            self._add_member(section, section.base, key, base_kwargs)
+
+    def _populate(self, section, ctype):
+        """Add the arguments of a ConfigObject class to a section."""
+        groups = {}
+        for entry in ctype._mutually_exclusive:
+            mutex = section.args.add_mutually_exclusive_group(required=entry.get("required", False))
+            for name in entry["arguments"]:
+                groups[name] = mutex
+        for key, arg_kwargs in ctype._arguments.items():
+            arg_kwargs = self._customize(ctype, key, dict(arg_kwargs), section.custom)
+            self._add_member(section, section.args, key, arg_kwargs, groups.get(key))
+
+    def _add_element(self, container, key, shared):
+        """Create the section for one element of a container; its base args default to the container's (shared) values."""
+        element = ConfigParser(
+            self, container, str(key), container.element_type, typed=container.typed, element=True,
+            choices=container.choices, config_choices=container.config_choices, custom=container.custom,
+        )
+        element.config_action = element.config.add_argument(
+            container.flag_prefix + str(key), dest="element",
+            nargs="+" if container.typed else "*", metavar=("TYPE", "CONFIG") if container.typed else "CONFIG",
+            help=f"element {key} (" + ("class and config files" if container.typed else "config files") + ")",
+        )
+        self._add_base_args(element, defaults=shared)
+        if element.ctype is not None:
+            self._populate(element, element.ctype)
+        container.children[str(key)] = element
+        return element
+
     @staticmethod
     def _ctype_name(ctype):
-        return "config" if ctype is MagiConfig else f"ConfigObject {ctype.__name__}"
+        if ctype is MagiConfig:
+            return "config"
+        return f"ConfigObject {ctype.__name__}" if ctype is not None else "ConfigObject"
 
     def _customize(self, ctype, key, kwargs, custom):
         """Apply customizations: presence of the key enables the argument; a dict updates its kwargs (except dest)."""
@@ -1229,12 +1528,14 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         """Expand unambiguous abbreviations of long options across this parser and all config sections."""
         option_strings = list(self._option_string_actions) + list(self._nested_option_strings)
         long_prefix = tuple(char * 2 for char in self.prefix_chars)
+        # flags under typed or container sections only exist once the class or elements are known
+        skip = tuple(section.flag_prefix for section in self._sections() if section.typed or section.container is not None)
         expanded = []
         for iarg, arg in enumerate(args):
             if arg == "--":
                 expanded.extend(args[iarg:])
                 break
-            if arg.startswith(long_prefix):
+            if arg.startswith(long_prefix) and not arg.startswith(skip):
                 option, sep, value = arg.partition("=")
                 if option not in option_strings:
                     matches = [option_string for option_string in option_strings if option_string.startswith(option)]
@@ -1325,8 +1626,20 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
             rest._transients.discard(cparser.dest)
             rest._sources.pop(cparser.dest, None)
             value = namespace._sources.get(cparser.dest, getattr(namespace, cparser.dest))
-            imports, lines = value._write(obj, opts)
-            _write_file(f"{stem}_{cparser.dest}{ext}", imports, lines)
+            comments = None
+            if isinstance(value, tuple):
+                # typed: the class is part of the command-line value, so it is recorded in a comment
+                cls, value = value
+                module = _import_config_paths.get(cls.__module__, cls.__module__)
+                comments = [f"# type: {cls.__name__}" + (f" (src: {module})" if module != "__main__" else "")]
+            if isinstance(value, MagiConfig):
+                imports, lines = value._write(obj, opts)
+            elif value is not None:
+                imports, expr = _source_expr(value, opts)
+                lines = [f"{obj} = {expr}"]
+            else:
+                continue
+            _write_file(f"{stem}_{cparser.dest}{ext}", imports, lines, comments)
         if rest.vars():
             imports, lines = rest._write(obj, opts)
             _write_file(filename, imports, lines)

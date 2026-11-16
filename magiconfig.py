@@ -1210,6 +1210,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         self._magi_calls.append(("set_default_source", (source,), {}))
 
     def clear_default_source(self):
+        """Subsequent arguments (without an explicit source) are added to this parser itself."""
         self._default_source = None
         self._magi_calls.append(("clear_default_source", (), {}))
 
@@ -1578,6 +1579,8 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         return namespace if namespace is not None else argparse.Namespace()
 
     def parse_known_args(self, args=None, namespace=None):
+        """argparse parse_known_args(); with config args, the config sections are parsed first (in the order added),
+        then this parser's own arguments (including subparsers, help, and version)."""
         if not self._has_configs():
             return super().parse_known_args(args, namespace)
 
@@ -1602,6 +1605,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
             raise
 
     def parse_known_intermixed_args(self, args=None, namespace=None):
+        """argparse parse_known_intermixed_args(); not supported with config args."""
         if self._has_configs():
             raise MagiConfigError("Intermixed parsing is not supported with config args")
         return super().parse_known_intermixed_args(args, namespace)
@@ -1675,6 +1679,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         return actions, groups
 
     def format_usage(self):
+        """argparse format_usage(), including config args (see _usage_actions)."""
         if not self._config_parsers:
             return super().format_usage()
         formatter = self._get_formatter()
@@ -1682,6 +1687,7 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         return formatter.format_help()
 
     def format_help(self):
+        """argparse format_help(), followed by one section per config section (nested sections indented)."""
         if not self._config_parsers:
             return super().format_help()
         formatter = self._get_formatter()

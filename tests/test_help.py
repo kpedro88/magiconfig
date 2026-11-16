@@ -1,8 +1,6 @@
 """Help and usage: sections, nesting, config-only subsections, descriptions, short vs full usage, help_depth."""
 import argparse
 
-import pytest
-
 import magiconfig
 from magiconfig import ConfigObject
 from conftest import help_heading

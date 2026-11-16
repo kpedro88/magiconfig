@@ -526,11 +526,7 @@ def _check_group_kwargs(kwargs):
 
 
 class _ArgumentGroup(argparse._ArgumentGroup):
-    """Argument group that lets its parser track and check every action that is added."""
-    def __init__(self, container, *args, **kwargs):
-        super().__init__(container, *args, **kwargs)
-        self._parser = container
-
+    """Argument group that lets its parser (_parser) track and check every action that is added."""
     def add_argument(self, *args, **kwargs):
         _check_group_kwargs(kwargs)
         return super().add_argument(*args, **kwargs)
@@ -581,6 +577,7 @@ class _MagiParserBase:
         if self._groups_locked:
             raise MagiConfigError("Only the top-level parser can have argument groups")
         group = _ArgumentGroup(self, *args, **kwargs)
+        group._parser = self
         self._action_groups.append(group)
         return group
 
@@ -1171,19 +1168,11 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         # record of magiconfig-specific calls, replayed for parsers that use this one as a parent
         self._magi_calls = []
         self._replayed_groups = {}
-        # parents are handled after the magiconfig setup (argparse would only copy native actions)
-        if len(args) > 4:
-            parents = args[4]
-            args = args[:4] + ([],) + args[5:]
-        else:
-            parents = kwargs.pop("parents", [])
         super().__init__(*args, **kwargs)
         self.register('action', 'parsers', _SubParsersAction)
+        # argparse copies the native actions of parents; the config sections are recreated from the recorded calls
+        parents = args[4] if len(args) > 4 else kwargs.get("parents", [])
         for parent in parents:
-            self._add_container_actions(parent)
-            defaults = getattr(parent, "_defaults", None)
-            if defaults is not None:
-                self._defaults.update(defaults)
             for method, call_args, call_kwargs in getattr(parent, "_magi_calls", []):
                 getattr(self, method)(*call_args, **call_kwargs)
 

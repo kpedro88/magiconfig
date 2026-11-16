@@ -22,6 +22,8 @@ __all__ = [
     "ArgumentParser",
     "import_config",
     "imported",
+    "DictAction",
+    "main",
     # re-exported from argparse
     "Action",
     "ArgumentDefaultsHelpFormatter",
@@ -143,12 +145,16 @@ def _class_expr(cls):
         return {f"from {module} import {top}"}, qualname
 
 
-def _write_file(filename, imports, lines, comments=None):
-    """Write a config file: optional comments, imports (statements before assignments), then the given lines."""
+def _format_file(imports, lines, comments=None):
+    """Contents of a config file: optional comments, imports (statements before assignments), then the given lines."""
     import_lines = sorted(imports, key=lambda line: (not line.startswith(("import ", "from ")), line))
     header = list(comments or []) + ["from magiconfig import MagiConfig"]
+    return '\n'.join(header + import_lines + [""] + lines)
+
+
+def _write_file(filename, imports, lines, comments=None):
     with open(filename, 'w') as outfile:
-        outfile.write('\n'.join(header + import_lines + [""] + lines))
+        outfile.write(_format_file(imports, lines, comments))
 
 
 class MagiConfig(argparse.Namespace):
@@ -660,7 +666,7 @@ class _MagiParserBase:
                 continue
             from_config = getattr(actions[0], "from_config", None)
             if from_config is not None:
-                val = from_config(self, val)
+                val = from_config(val)
             # check type (if uniquely provided and not None) and choices
             elif len(set(action.type for action in actions)) == 1 and (actions[0].type is not None or actions[0].choices is not None):
                 action = actions[0]
@@ -1704,6 +1710,118 @@ class ArgumentParser(_MagiParserBase, argparse.ArgumentParser):
         return formatter.format_help()
 
 
+class DictAction(argparse.Action):
+    """Collect KEY=VALUE pairs into a dict; repeated use merges into (a copy of) the existing value.
+
+    Extra kwargs for add_argument():
+    * key_type, value_type: conversions for keys and values (None = keep strings)
+    * dict_type: callable that returns an empty dict (e.g. OrderedDict, or lambda: defaultdict(list))
+    * sep: separator between key and value
+    Subclasses can override parse_params() to interpret the command-line tokens differently.
+    Dicts provided by configs are converted with the same key and value types.
+    """
+    def __init__(self, option_strings, dest, nargs="*", key_type=str, value_type=None, dict_type=dict, sep="=", **kwargs):
+        self.key_type = key_type
+        self.value_type = value_type
+        self.dict_type = dict_type
+        self.sep = sep
+        kwargs.setdefault("metavar", f"KEY{sep}VALUE")
+        super().__init__(option_strings, dest, nargs=nargs, **kwargs)
+
+    def parse_params(self, values):
+        """(key, value) pairs from the command-line tokens."""
+        for token in values:
+            key, sep, value = token.partition(self.sep)
+            if not sep:
+                raise argparse.ArgumentError(self, f"expected KEY{self.sep}VALUE: {token!r}")
+            yield key, value
+
+    def convert(self, pairs):
+        result = self.dict_type()
+        for key, value in pairs:
+            try:
+                if self.key_type is not None:
+                    key = self.key_type(key)
+                if self.value_type is not None:
+                    value = self.value_type(value)
+            except (TypeError, ValueError):
+                raise argparse.ArgumentError(self, f"invalid entry: {key!r}: {value!r}") from None
+            result[key] = value
+        return result
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        result = self.dict_type()
+        current = getattr(namespace, self.dest, None)
+        if current is not None:
+            result.update(current)
+        result.update(self.convert(self.parse_params(values)))
+        setattr(namespace, self.dest, result)
+
+    def from_config(self, value):
+        return self.convert(value.items())
+
+
+def main(argv=None):
+    """Config printer: print (or write) the fully expanded MagiConfig object(s) defined in a config file.
+
+    The output is itself a valid config file.
+    """
+    parser = argparse.ArgumentParser(prog="magiconfig", description=main.__doc__.split("\n")[0])
+    parser.add_argument("config", help="config file")
+    parser.add_argument("-o", "--obj", nargs="+", help="name(s) of the object(s) to print (dotted names allowed; default: all top-level MagiConfig objects)")
+    parser.add_argument("--write", metavar="FILE", help="write to this file instead of printing")
+    args = parser.parse_args(argv)
+
+    if args.obj:
+        objects = list(zip(args.obj, import_config(args.config, args.obj)))
+    else:
+        # definition order; MagiConfigs imported into the file are part of its namespace
+        objects = [
+            (name, value) for name, value in vars(import_config(args.config)).items()
+            if not name.startswith("_") and isinstance(value, MagiConfig)
+        ]
+
+    opts = _WriteOptions()
+    imports = set()
+    blocks = []
+    defined = set()
+    printed = {}
+    for name, value in objects:
+        lines = []
+        # intermediate objects for dotted names
+        parts = name.split(".")
+        for i in range(1, len(parts)):
+            prefix = ".".join(parts[:i])
+            if prefix not in defined:
+                lines.append(f"{prefix} = MagiConfig()")
+                defined.add(prefix)
+        if id(value) in printed:
+            lines.append(f"{name} = {printed[id(value)]}")
+        elif isinstance(value, MagiConfig):
+            def record(config, path):
+                printed.setdefault(id(config), path)
+                for attr, val in config.vars().items():
+                    if isinstance(val, MagiConfig):
+                        record(val, f"{path}.{attr}")
+            record(value, name)
+            imports_tmp, lines_tmp = value._write(name, opts)
+            imports.update(imports_tmp)
+            lines.extend(lines_tmp)
+        else:
+            imports_tmp, expr = opts.value_expr(name, name, value)
+            imports.update(imports_tmp)
+            lines.append(f"{name} = {expr}")
+        defined.add(name)
+        blocks.append("\n".join(lines))
+
+    text = _format_file(imports, ["\n\n".join(blocks)]) + "\n"
+    if args.write:
+        with open(args.write, "w") as outfile:
+            outfile.write(text)
+    else:
+        sys.stdout.write(text)
+
+
 # add all public classes and constants from argparse namespace to this namespace to be interchangeable
 # (from ConfigArgParse)
 Action = argparse.Action
@@ -1732,3 +1850,9 @@ class ArgumentDefaultsRawHelpFormatter(
     argparse.RawTextHelpFormatter,
     argparse.RawDescriptionHelpFormatter):
     """HelpFormatter that adds default values AND doesn't do line-wrapping"""
+
+
+if __name__ == "__main__":
+    # run from the "magiconfig" module (not this "__main__" copy), so classes match those used by config files
+    import magiconfig
+    magiconfig.main()

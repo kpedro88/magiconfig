@@ -17,6 +17,9 @@ classifiers = [
 keywords = ["config", "configuration", "argparse", "parameters", "magiconfig"]
 dependencies = []
 
+[project.scripts]
+magiconfig = "magiconfig:main"
+
 [project.urls]
 Homepage = "https://github.com/kpedro88/magiconfig"
 
